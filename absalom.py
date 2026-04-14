@@ -10,7 +10,7 @@ from vosk import Model, KaldiRecognizer
 # Configuration
 MODEL_PATH = "model"
 MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-it-0.22.zip"
-WAKE_WORDS = ["absalom","absalon","assalom","assalon","[unk]"]
+WAKE_WORDS = ["absalom","absalon","assalom","assalon"]
 SAMPLE_RATE = 16000
 
 # Audio queue
