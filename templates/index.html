@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absalom Face Control</title>
+    <style>
+        :root {
+            --bg-color: #0a0a0c;
+            --eye-color: #00f2ff;
+            --eye-shadow: rgba(0, 242, 255, 0.5);
+            --eye-width: 120px;
+            --eye-height: 200px;
+            --eye-radius: 20px;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        .face-container {
+            position: relative;
+            display: flex;
+            gap: 100px;
+            perspective: 1000px;
+        }
+
+        .eye {
+            width: var(--eye-width);
+            height: var(--eye-height);
+            background-color: var(--eye-color);
+            border-radius: var(--eye-radius);
+            box-shadow: 0 0 30px var(--eye-shadow), inset 0 0 15px rgba(255, 255, 255, 0.5);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Reflection Effect */
+        .eye::after {
+            content: '';
+            position: absolute;
+            top: 10%;
+            left: 10%;
+            width: 30%;
+            height: 20%;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            filter: blur(2px);
+        }
+
+        .eye.closed {
+            height: 4px;
+            margin-top: calc(var(--eye-height) / 2 - 2px);
+            margin-bottom: calc(var(--eye-height) / 2 - 2px);
+            box-shadow: 0 0 10px var(--eye-shadow);
+        }
+
+        /* Glow animation for "alive" feel */
+        @keyframes pulse {
+            0% {
+                opacity: 0.8;
+                box-shadow: 0 0 20px var(--eye-shadow);
+            }
+
+            50% {
+                opacity: 1;
+                box-shadow: 0 0 40px var(--eye-shadow);
+            }
+
+            100% {
+                opacity: 0.8;
+                box-shadow: 0 0 20px var(--eye-shadow);
+            }
+        }
+
+        .eye:not(.closed) {
+            animation: pulse 4s infinite ease-in-out;
+        }
+
+        .status-indicator {
+            position: absolute;
+            bottom: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="face-container">
+        <div id="eye-left" class="eye"></div>
+        <div id="eye-right" class="eye"></div>
+        <div id="status" class="status-indicator">System Active</div>
+    </div>
+
+    <script>
+        const eyeLeft = document.getElementById('eye-left');
+        const eyeRight = document.getElementById('eye-right');
+        const statusText = document.getElementById('status');
+
+        function updateEyes(state) {
+            if (state === 'closed') {
+                eyeLeft.classList.add('closed');
+                eyeRight.classList.add('closed');
+            } else {
+                eyeLeft.classList.remove('closed');
+                eyeRight.classList.remove('closed');
+            }
+        }
+
+        async function pollStatus() {
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
+                updateEyes(data.eyes);
+                statusText.innerText = `System: ${data.eyes}`;
+            } catch (err) {
+                console.error("Polling error:", err);
+            }
+        }
+
+        // Poll every 100ms for responsiveness
+        setInterval(pollStatus, 100);
+
+        // Initial blink animation sequence for "boot up"
+        setTimeout(() => {
+            updateEyes('closed');
+            setTimeout(() => updateEyes('open'), 150);
+        }, 1000);
+    </script>
+</body>
+
+</html>

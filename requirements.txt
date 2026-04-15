@@ -1,3 +1,6 @@
 vosk
 sounddevice
 numpy
+flask
+flask-cors
+edge-tts

@@ -6,11 +6,45 @@ import zipfile
 import urllib.request
 import sounddevice as sd
 from vosk import Model, KaldiRecognizer
+import requests
+import asyncio
+import edge_tts
+import subprocess
+
+BASE_URL = "http://127.0.0.1:5000"
+
+def blink():
+    print("Inviando comando blink...")
+    requests.post(f"{BASE_URL}/blink")
+
+def set_mode(mode):
+    print(f"Impostando modalità a: {mode}")
+    try:
+        r = requests.post(f"{BASE_URL}/control", json={"mode": mode})
+        return r.json()
+    except Exception as e:
+        print(f"Errore: {e}")
+
+VOICE = "it-IT-DiegoNeural"
+
+async def _speak_async(text):
+    communicate = edge_tts.Communicate(text, VOICE)
+    # Use a temporary file name to avoid collisions if called rapidly
+    filename = "speech.mp3"
+    await communicate.save(filename)
+    # ffplay handles the playback
+    subprocess.run(["ffplay", "-nodisp", "-autoexit", filename], 
+                   stderr=subprocess.DEVNULL, 
+                   stdout=subprocess.DEVNULL)
+
+def speak(text):
+    print(f"Absalom dice: '{text}'")
+    asyncio.run(_speak_async(text))
 
 # Configuration
 MODEL_PATH = "model"
 MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-it-0.22.zip"
-WAKE_WORDS = ["absalom","absalon","assalom","assalon"]
+WAKE_WORDS = ["absalom","absalon","assalom","assalon","addormentati"]
 SAMPLE_RATE = 16000
 
 # Audio queue
@@ -61,7 +95,14 @@ def start_assistant():
                         print(f"DEBUG: Sentito -> '{text}'")
                     
                     if any(word in text for word in WAKE_WORDS):
-                        print("\n[!] Ti ho sentito")
+                        if "addormentati" in text:
+                            print("\n[!] Notte ...")
+                            set_mode("asleep")
+                            speak("D'accordo, vado a dormire. Buonanotte.")
+                        else:
+                            print("\n[!] Ti ho sentito")
+                            set_mode("awake")
+                            speak("Ciao!")
                 else:
                     # Partial record?
                     # partial = json.loads(rec.PartialResult())
