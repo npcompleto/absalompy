@@ -9,6 +9,7 @@ app = Flask(__name__)
 face_state = {
     "eyes": "open",
     "mode": "asleep",  # "awake" o "asleep"
+    "busy": False,
     "last_update": time.time()
 }
 
@@ -61,6 +62,10 @@ def control():
             else:
                 face_state['eyes'] = "open"
             updated = True
+
+    if 'busy' in data:
+        face_state['busy'] = bool(data['busy'])
+        updated = True
             
     if updated:
         face_state['last_update'] = time.time()

@@ -4,3 +4,6 @@ numpy
 flask
 flask-cors
 edge-tts
+ollama
+anthropic
+python-dotenv

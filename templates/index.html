@@ -97,10 +97,56 @@
             letter-spacing: 2px;
             text-transform: uppercase;
         }
+
+        /* Loader Styles */
+        #loader {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            transition: opacity 0.3s ease;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(0, 242, 255, 0.1);
+            border-top: 3px solid var(--eye-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            filter: drop-shadow(0 0 10px var(--eye-shadow));
+        }
+
+        .loader-text {
+            color: var(--eye-color);
+            font-size: 0.7rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            opacity: 0.8;
+            animation: pulse-text 1.5s infinite ease-in-out;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes pulse-text {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
     </style>
 </head>
 
 <body>
+    <div id="loader">
+        <div class="spinner"></div>
+        <div class="loader-text">Analisi in corso</div>
+    </div>
     <div class="face-container">
         <div id="eye-left" class="eye"></div>
         <div id="eye-right" class="eye"></div>
@@ -111,6 +157,7 @@
         const eyeLeft = document.getElementById('eye-left');
         const eyeRight = document.getElementById('eye-right');
         const statusText = document.getElementById('status');
+        const loader = document.getElementById('loader');
 
         function updateEyes(state) {
             if (state === 'closed') {
@@ -126,8 +173,16 @@
             try {
                 const response = await fetch('/status');
                 const data = await response.json();
+                
                 updateEyes(data.eyes);
                 statusText.innerText = `System: ${data.eyes}`;
+                
+                // Toggle Loader
+                if (data.busy) {
+                    loader.style.display = 'flex';
+                } else {
+                    loader.style.display = 'none';
+                }
             } catch (err) {
                 console.error("Polling error:", err);
             }
