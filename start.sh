@@ -15,7 +15,7 @@ source venv/bin/activate
 # Installa/Aggiorna le dipendenze
 echo "--- Verifica dipendenze... ---"
 pip install --quiet --upgrade pip
-pip install --quiet -r requirements.txt
+pip install -r requirements.txt
 
 # Funzione per pulire i processi all'uscita (CTRL+C)
 cleanup() {

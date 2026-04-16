@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import json
 import queue
 import zipfile
@@ -20,7 +21,7 @@ from dotenv import load_dotenv
 # Carica variabili d'ambiente da .env
 # LLM Configuration
 LLM_PROVIDER = "ollama-local" # "ollama-local" or "anthropic"
-OLLAMA_MODEL = "llama3.2:1b"
+OLLAMA_MODEL = "qwen3:1.7b"
 ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 load_dotenv()
 
@@ -74,6 +75,9 @@ def get_piper_voice():
 
 def speak(text):
     global is_speaking
+    
+    # Rimuove emoji e caratteri speciali che il TTS non può leggere bene
+    text = re.sub(r'[^\w\s\d.,!?;:()\'\"-]', '', text)
     
     print(f"Absalom dice: '{text}'")
     voice = get_piper_voice()
@@ -152,10 +156,23 @@ def ask_llm(user_input):
     
     try:
         # Prima chiamata: il modello decide se usare tool o rispondere
-        ai_msg = llm_with_tools.invoke(messages)
-        messages.append(ai_msg)
+        response = ""
+        complete_response = ""
+        chunks = llm_with_tools.stream(messages)
+        for chunk in chunks:
+            print(chunk)
+            if chunk.text:
+                print(chunk.text, end="|")
+                response += chunk.text
+                complete_response += chunk.text
+                if chunk.text.endswith(".") or chunk.text.endswith("!") or chunk.text.endswith("?") or chunk.text.endswith("\n") or chunk.text.endswith("\"") or chunk.text.endswith(":") or chunk.text.endswith(";") or chunk.text.endswith(","):
+                    speak(response)
+                    response = ""
+            if chunk.tool_call_chunks:
+                print(chunk.tool_call_chunks)         
+        
         # Se il modello ha richiesto l'uso di tool, esegui ogni chiamata
-        if ai_msg.tool_calls:
+        """if ai_msg.tool_calls:
             for tool_call in ai_msg.tool_calls:
                 tool_name = tool_call["name"].lower()
                 if tool_name in tool_map:
@@ -164,13 +181,15 @@ def ask_llm(user_input):
                     # Invocazione del tool e concatenazione del messaggio di output
                     tool_output = selected_tool.invoke(tool_call["args"])
                     print(f"--- Output del tool: {tool_output} ---")
-                    messages.append(ToolMessage(content=str(tool_output), tool_call_id=tool_call["id"]))
+                    return tool_output
+                    #messages.append(ToolMessage(content=str(tool_output), tool_call_id=tool_call["id"]))
             
             # Seconda chiamata dopo che i tool sono stati eseguiti per generare la risposta finale
-            final_msg = llm_with_tools.invoke(messages)
-            return final_msg.content
-            
-        return ai_msg.content
+            #final_msg = llm_with_tools.invoke(messages)
+            #return final_msg.content
+            """
+        print("Risposta completa: " + complete_response)
+        return complete_response
     except Exception as e:
         print(f"Errore durante l'interazione con l'LLM via LangChain: {e}")
         return f"Spiacente, ho avuto un intoppo tecnico con il mio cervello LangChain: {e}"
@@ -188,6 +207,13 @@ SLEEP_PHRASES = [
     "Mi aggiusto i cavi",
     "A dopo",
     "Batteria in risparmio"
+]
+
+THINKING_PHRASES = [
+    "Fammi pensare",
+    "Un momento",
+    "Ci penso un attimo",
+    "Ok!"
 ]
 SAMPLE_RATE = 16000
 
@@ -222,6 +248,10 @@ def download_model():
 
 def start_assistant():
     bootstrap_model()
+    #response = ask_llm("Cosa ti piace mangiare?")
+    #print(f"Absalom dice: '{response}'")
+    #response = ask_llm("che ore sono?")
+    #print(f"Absalom dice: '{response}'")
     if not os.path.exists(MODEL_PATH):
         download_model()
 
@@ -250,9 +280,10 @@ def start_assistant():
                         # Identifica quale parola chiave è stata usata per rimuoverla dal prompt
                         trigger_word = next((w for w in WAKE_WORDS if w in text), None)
                         print("\n[!] Ti ho sentito")
-                        speak("Eccomi!")
+                        
                         set_mode("awake")
                         is_awake = True
+                        speak("Eccomi!")
                         
                         # reset recognizer  
                         rec = KaldiRecognizer(model, SAMPLE_RATE)
@@ -275,8 +306,9 @@ def start_assistant():
                         set_busy(True)
                         print(f"DEBUG: Sentito -> '{text}'")
                         print(f"Analisi richiesta: '{text}'")
+                        speak(random.choice(THINKING_PHRASES))
                         response = ask_llm(text)
-                        speak(response)
+                        #speak(response)
                         
                         # Svuota la coda
                         while not q.empty():
