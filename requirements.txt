@@ -3,7 +3,10 @@ sounddevice
 numpy
 flask
 flask-cors
-edge-tts
+piper-tts
 ollama
 anthropic
 python-dotenv
+langchain-ollama
+langchain-anthropic
+langchain-core

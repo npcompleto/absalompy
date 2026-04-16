@@ -4,18 +4,26 @@ import json
 import queue
 import zipfile
 import urllib.request
+import random
 import sounddevice as sd
 from vosk import Model, KaldiRecognizer
 import requests
-import asyncio
-import edge_tts
+from piper.voice import PiperVoice
+import wave
 import subprocess
-import ollama
-import anthropic
+from langchain_ollama import ChatOllama
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
+from tools.time_tool import get_current_time
 from dotenv import load_dotenv
 
 # Carica variabili d'ambiente da .env
+# LLM Configuration
+LLM_PROVIDER = "ollama-local" # "ollama-local" or "anthropic"
+OLLAMA_MODEL = "llama3.2:1b"
+ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 load_dotenv()
+
 
 BASE_URL = "http://127.0.0.1:5000"
 
@@ -37,21 +45,59 @@ def set_busy(busy_status):
     except Exception as e:
         print(f"Errore set_busy: {e}")
 
-VOICE = "it-IT-DiegoNeural"
+def set_speaking(speaking_status):
+    try:
+        requests.post(f"{BASE_URL}/control", json={"speaking": speaking_status})
+    except Exception as e:
+        print(f"Errore set_speaking: {e}")
 
-async def _speak_async(text):
-    communicate = edge_tts.Communicate(text, VOICE)
-    # Use a temporary file name to avoid collisions if called rapidly
-    filename = "speech.mp3"
-    await communicate.save(filename)
-    # ffplay handles the playback
-    subprocess.run(["ffplay", "-nodisp", "-autoexit", filename], 
-                   stderr=subprocess.DEVNULL, 
-                   stdout=subprocess.DEVNULL)
+PIPER_MODEL_DIR = "models/piper"
+PIPER_MODEL_NAME = "it_IT-paola-medium.onnx"
+PIPER_MODEL_PATH = os.path.join(PIPER_MODEL_DIR, PIPER_MODEL_NAME)
+PIPER_CONFIG_PATH = PIPER_MODEL_PATH + ".json"
+PIPER_MODEL_URL = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/it/it_IT/paola/medium/{PIPER_MODEL_NAME}?download=true"
+PIPER_CONFIG_URL = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/it/it_IT/paola/medium/{PIPER_MODEL_NAME}.json?download=true"
+
+_piper_voice = None
+
+def get_piper_voice():
+    global _piper_voice
+    if _piper_voice is None:
+        if not os.path.exists(PIPER_MODEL_PATH) or not os.path.exists(PIPER_CONFIG_PATH):
+            print("--- Download modello Piper in corso... ---")
+            os.makedirs(PIPER_MODEL_DIR, exist_ok=True)
+            urllib.request.urlretrieve(PIPER_MODEL_URL, PIPER_MODEL_PATH)
+            urllib.request.urlretrieve(PIPER_CONFIG_URL, PIPER_CONFIG_PATH)
+            print("--- Modello Piper pronto. ---")
+        _piper_voice = PiperVoice.load(PIPER_MODEL_PATH, config_path=PIPER_CONFIG_PATH)
+    return _piper_voice
 
 def speak(text):
+    global is_speaking
+    
     print(f"Absalom dice: '{text}'")
-    asyncio.run(_speak_async(text))
+    voice = get_piper_voice()
+    filename = "speech.wav"
+    try:
+        with wave.open(filename, "wb") as wav_file:
+            # Sostituisci la sintesi diretta con l'iteratore corretta
+            for i, chunk in enumerate(voice.synthesize(text)):
+                if i == 0:
+                    wav_file.setnchannels(chunk.sample_channels)
+                    wav_file.setsampwidth(chunk.sample_width)
+                    wav_file.setframerate(chunk.sample_rate)
+                wav_file.writeframes(chunk.audio_int16_bytes)
+        is_speaking = True
+        set_speaking(True)
+        # ffplay handles the playback
+        subprocess.run(["ffplay", "-nodisp", "-autoexit", filename], 
+                       stderr=subprocess.DEVNULL, 
+                       stdout=subprocess.DEVNULL)
+    except Exception as e:
+        print(f"Errore durante la sintesi vocale: {e}")
+    finally:
+        is_speaking = False
+        set_speaking(False)
 
 def get_persona():
     """Carica e concatena i file della personalità."""
@@ -66,62 +112,90 @@ def get_persona():
         print(f"Errore nel caricamento della persona: {e}")
     return persona
 
-# LLM Configuration
-LLM_PROVIDER = "anthropic" # "ollama-local" or "anthropic"
-OLLAMA_MODEL = "llama3.2:1b"
-ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 
-def ask_ollama(user_input, system_prompt):
-    """Interroga Ollama localmente."""
-    try:
-        messages=[
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': user_input},
-        ]
-        response = ollama.chat(model=OLLAMA_MODEL, messages=messages)
-        return response['message']['content']
-    except Exception as e:
-        print(f"Errore Ollama: {e}")
-        return "Errore di connessione a Ollama. Glitch!"
+# Lista dei tool disponibili per LangChain
+tools = [get_current_time]
+# Mappatura per l'esecuzione automatica dei tool basata sul nome
+tool_map = {tool.name: tool for tool in tools}
 
-def ask_anthropic(user_input, system_prompt):
-    """Interroga Anthropic Claude."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return "Errore: ANTHROPIC_API_KEY non configurata nel file .env."
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-        message = client.messages.create(
-            model=ANTHROPIC_MODEL,
-            max_tokens=1024,
-            system=system_prompt,
-            messages=[
-                {"role": "user", "content": user_input}
-            ]
-        )
-        return message.content[0].text
-    except Exception as e:
-        print(f"Errore Anthropic: {e}")
-        return "Errore di connessione a Claude. Glitch nel cloud!"
+def bootstrap_model():
+    print("--- Avvio bootstrap del modello, solo se locale... ---")
+    if LLM_PROVIDER == "ollama-local":
+        try:
+            # Prova a caricare il modello
+            llm = ChatOllama(model=OLLAMA_MODEL)
+            ai_msg = llm.invoke("Hello")
+            print("--- Modello locale caricato con successo. ---")
+        except Exception as e:
+            print(f"Errore durante il caricamento del modello locale: {e}")
+            print("Assicurati che Ollama sia in esecuzione e che il modello sia installato.")
+    
 
 def ask_llm(user_input):
-    """Interroga il provider configurato."""
+    """Interroga il provider configurato usando LangChain e supporta i tool."""
     system_prompt = get_persona()
+    
+    # Inizializza il modello corretto tramite LangChain
     if LLM_PROVIDER == "anthropic":
-        return ask_anthropic(user_input, system_prompt)
+        llm = ChatAnthropic(model=ANTHROPIC_MODEL)
     else:
-        return ask_ollama(user_input, system_prompt)
+        llm = ChatOllama(model=OLLAMA_MODEL)
+    
+    # Associa i tool al modello
+    llm_with_tools = llm.bind_tools(tools)
+    
+    # Prepara la cronologia dei messaggi
+    messages = [
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=user_input)
+    ]
+    
+    try:
+        # Prima chiamata: il modello decide se usare tool o rispondere
+        ai_msg = llm_with_tools.invoke(messages)
+        messages.append(ai_msg)
+        # Se il modello ha richiesto l'uso di tool, esegui ogni chiamata
+        if ai_msg.tool_calls:
+            for tool_call in ai_msg.tool_calls:
+                tool_name = tool_call["name"].lower()
+                if tool_name in tool_map:
+                    selected_tool = tool_map[tool_name]
+                    print(f"--- Eseguendo tool LangChain: {tool_name} ---")
+                    # Invocazione del tool e concatenazione del messaggio di output
+                    tool_output = selected_tool.invoke(tool_call["args"])
+                    print(f"--- Output del tool: {tool_output} ---")
+                    messages.append(ToolMessage(content=str(tool_output), tool_call_id=tool_call["id"]))
+            
+            # Seconda chiamata dopo che i tool sono stati eseguiti per generare la risposta finale
+            final_msg = llm_with_tools.invoke(messages)
+            return final_msg.content
+            
+        return ai_msg.content
+    except Exception as e:
+        print(f"Errore durante l'interazione con l'LLM via LangChain: {e}")
+        return f"Spiacente, ho avuto un intoppo tecnico con il mio cervello LangChain: {e}"
 
 # Configuration
 MODEL_PATH = "model"
 MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-it-0.22.zip"
 WAKE_WORDS = ["absalom","absalon","assalom","assalon"]
+SLEEP_PHRASES = [
+    "Vado in standby",
+    "Buonanotte",
+    "Sogni digitali",
+    "Circuiti a riposo",
+    "Off...",
+    "Mi aggiusto i cavi",
+    "A dopo",
+    "Batteria in risparmio"
+]
 SAMPLE_RATE = 16000
 
 # Audio queue and status
 q = queue.Queue()
 is_busy = False
 is_awake = False
+is_speaking = False
 
 def callback(indata, frames, time, status):
     """This is called (from a separate thread) for each audio block."""
@@ -147,6 +221,7 @@ def download_model():
     print("Modello pronto.\n")
 
 def start_assistant():
+    bootstrap_model()
     if not os.path.exists(MODEL_PATH):
         download_model()
 
@@ -167,19 +242,21 @@ def start_assistant():
                 if rec.AcceptWaveform(data):
                     result = json.loads(rec.Result())
                     text = result.get("text", "").lower()
-                    
+                    print(f"DEBUG: Sentito -> '{text}'")
                     if any(word in text for word in WAKE_WORDS):
+                        print("\n[!] Ti ho sentito")
                         is_busy = True
                         set_busy(True)
                         # Identifica quale parola chiave è stata usata per rimuoverla dal prompt
                         trigger_word = next((w for w in WAKE_WORDS if w in text), None)
                         print("\n[!] Ti ho sentito")
+                        speak("Eccomi!")
                         set_mode("awake")
                         is_awake = True
                         
-                        # reset recognizer
+                        # reset recognizer  
                         rec = KaldiRecognizer(model, SAMPLE_RATE)
-                        speak("Eccomi!")
+                        
                         
                         # Svuota la coda per evitare di processare audio accumulato
                         while not q.empty():
@@ -187,6 +264,12 @@ def start_assistant():
                             except queue.Empty: break
                         is_busy = False
                         set_busy(False)
+                    elif is_awake and text == "addormentati":
+                        rec = KaldiRecognizer(model, SAMPLE_RATE, json.dumps(WAKE_WORDS))
+                        phrase = random.choice(SLEEP_PHRASES)
+                        speak(phrase)
+                        set_mode("asleep")
+                        is_awake = False
                     elif is_awake and text != "" and text != " ":
                         is_busy = True
                         set_busy(True)

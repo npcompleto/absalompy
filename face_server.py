@@ -10,6 +10,7 @@ face_state = {
     "eyes": "open",
     "mode": "asleep",  # "awake" o "asleep"
     "busy": False,
+    "speaking": False,
     "last_update": time.time()
 }
 
@@ -65,6 +66,10 @@ def control():
 
     if 'busy' in data:
         face_state['busy'] = bool(data['busy'])
+        updated = True
+
+    if 'speaking' in data:
+        face_state['speaking'] = bool(data['speaking'])
         updated = True
             
     if updated:

@@ -139,6 +139,50 @@
             0%, 100% { opacity: 0.4; }
             50% { opacity: 1; }
         }
+
+        /* Mouth Styles */
+        .mouth {
+            position: absolute;
+            bottom: -140px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 100px;
+            transition: all 0.3s ease;
+            opacity: 0.8;
+        }
+
+        .lip {
+            fill: none;
+            stroke: var(--eye-color);
+            stroke-width: 8;
+            stroke-linecap: round;
+            filter: drop-shadow(0 0 10px var(--eye-shadow));
+            transition: all 0.3s ease;
+        }
+
+        /* Closed state (flat lines) */
+        #lip-upper { d: path("M 30 50 Q 100 50 170 50"); }
+        #lip-lower { d: path("M 30 52 Q 100 52 170 52"); }
+
+        /* Speaking animation */
+        .speaking #lip-upper {
+            animation: talk-upper 0.25s infinite ease-in-out;
+        }
+
+        .speaking #lip-lower {
+            animation: talk-lower 0.25s infinite ease-in-out;
+        }
+
+        @keyframes talk-upper {
+            0%, 100% { d: path("M 30 50 Q 100 50 170 50"); transform: translateY(0); }
+            50% { d: path("M 30 50 Q 100 20 170 50"); transform: translateY(-10px); }
+        }
+
+        @keyframes talk-lower {
+            0%, 100% { d: path("M 30 52 Q 100 52 170 52"); transform: translateY(0); }
+            50% { d: path("M 30 52 Q 100 82 170 52"); transform: translateY(10px); }
+        }
     </style>
 </head>
 
@@ -150,6 +194,10 @@
     <div class="face-container">
         <div id="eye-left" class="eye"></div>
         <div id="eye-right" class="eye"></div>
+        <svg id="mouth-svg" class="mouth" viewBox="0 0 200 100">
+            <path id="lip-upper" class="lip" />
+            <path id="lip-lower" class="lip" />
+        </svg>
         <div id="status" class="status-indicator">System Active</div>
     </div>
 
@@ -158,6 +206,7 @@
         const eyeRight = document.getElementById('eye-right');
         const statusText = document.getElementById('status');
         const loader = document.getElementById('loader');
+        const mouthSvg = document.getElementById('mouth-svg');
 
         function updateEyes(state) {
             if (state === 'closed') {
@@ -182,6 +231,13 @@
                     loader.style.display = 'flex';
                 } else {
                     loader.style.display = 'none';
+                }
+
+                // Toggle Speaking (Mouth Animation)
+                if (data.speaking) {
+                    mouthSvg.classList.add('speaking');
+                } else {
+                    mouthSvg.classList.remove('speaking');
                 }
             } catch (err) {
                 console.error("Polling error:", err);
