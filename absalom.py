@@ -15,6 +15,7 @@ import wave
 import subprocess
 from langchain_ollama import ChatOllama
 from langchain_anthropic import ChatAnthropic
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 from tools.time_tool import get_current_time
 from dotenv import load_dotenv
@@ -28,6 +29,8 @@ load_dotenv()
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama-local")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:1.5b")
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-haiku-20240307")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+GOOGLE_MODEL = os.getenv("GOOGLE_MODEL", "gemini-2.0-flash")
 
 BASE_URL = "http://127.0.0.1:5000"
 
@@ -145,6 +148,8 @@ def ask_llm(user_input):
     # Inizializza il modello corretto tramite LangChain
     if LLM_PROVIDER == "anthropic":
         llm = ChatAnthropic(model=ANTHROPIC_MODEL)
+    elif LLM_PROVIDER == "google":
+        llm = ChatGoogleGenerativeAI(model=GOOGLE_MODEL, google_api_key=GOOGLE_API_KEY)
     else:
         llm = ChatOllama(model=OLLAMA_MODEL)
     

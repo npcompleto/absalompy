@@ -10,3 +10,4 @@ python-dotenv
 langchain-ollama
 langchain-anthropic
 langchain-core
+langchain-google-genai
