@@ -82,6 +82,10 @@ def get_piper_voice():
 def speak(text):
     global is_speaking
     
+    # Assicura che l'input sia una stringa (evita errori se l'LLM restituisce una lista di blocchi)
+    if not isinstance(text, str):
+        text = str(text)
+    
     # Rimuove emoji e caratteri speciali che il TTS non può leggere bene
     text = re.sub(r'[^\w\s\d.,!?;:()\'\"-]', '', text)
     
@@ -141,66 +145,80 @@ def bootstrap_model():
             print("Assicurati che Ollama sia in esecuzione e che il modello sia installato.")
     
 
-def ask_llm(user_input):
-    """Interroga il provider configurato usando LangChain e supporta i tool."""
+def ask_llm2(user_input):
+    """Interfaccia l'assistente con l'LLM configurato, gestendo i tool e la personalità."""
     system_prompt = get_persona()
     
-    # Inizializza il modello corretto tramite LangChain
-    if LLM_PROVIDER == "anthropic":
-        llm = ChatAnthropic(model=ANTHROPIC_MODEL)
-    elif LLM_PROVIDER == "google":
-        llm = ChatGoogleGenerativeAI(model=GOOGLE_MODEL, google_api_key=GOOGLE_API_KEY)
-    else:
-        llm = ChatOllama(model=OLLAMA_MODEL)
-    
-    # Associa i tool al modello
-    llm_with_tools = llm.bind_tools(tools)
-    
-    # Prepara la cronologia dei messaggi
-    messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=user_input)
-    ]
-    
+    # Inizializzazione del modello LangChain corretto
     try:
-        # Prima chiamata: il modello decide se usare tool o rispondere
-        response = ""
-        complete_response = ""
-        chunks = llm_with_tools.stream(messages)
-        for chunk in chunks:
-            print(chunk)
-            if chunk.text:
-                print(chunk.text, end="|")
-                response += chunk.text
-                complete_response += chunk.text
-                if chunk.text.endswith(".") or chunk.text.endswith("!") or chunk.text.endswith("?") or chunk.text.endswith("\n") or chunk.text.endswith("\"") or chunk.text.endswith(":") or chunk.text.endswith(";") or chunk.text.endswith(","):
-                    speak(response)
-                    response = ""
-            if chunk.tool_call_chunks:
-                print(chunk.tool_call_chunks)         
+        if LLM_PROVIDER == "anthropic":
+            llm = ChatAnthropic(model=ANTHROPIC_MODEL)
+        elif LLM_PROVIDER == "google":
+            llm = ChatGoogleGenerativeAI(model=GOOGLE_MODEL, google_api_key=GOOGLE_API_KEY)
+        else:
+            llm = ChatOllama(model=OLLAMA_MODEL)
         
-        # Se il modello ha richiesto l'uso di tool, esegui ogni chiamata
-        """if ai_msg.tool_calls:
+        # Binding dei tool alla catena
+        llm_with_tools = llm.bind_tools(tools)
+        
+        # Preparazione dei messaggi per la conversazione
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_input)
+        ]
+        
+        # Loop di iterazione per gestire eventuali tool requests
+        final_answer = ""
+        for step in range(5):  # Limite di sicurezza per evitare loop infiniti
+            print(f"--- Richiesta LLM (Passaggio {step + 1})... ---")
+            ai_msg = llm_with_tools.invoke(messages)
+            messages.append(ai_msg)
+            
+            # Se l'LLM ha risposto con del testo e NON ha tool call, abbiamo finito
+            if not ai_msg.tool_calls:
+                content = ai_msg.content
+                # Gestione dei contenuti che possono essere una lista di blocchi (comune in alcuni provider)
+                if isinstance(content, list):
+                    final_answer = " ".join([block.get("text", "") if isinstance(block, dict) else str(block) for block in content])
+                else:
+                    final_answer = str(content)
+                break
+                
+            # Se l'LLM ha richiesto l'uso di tool, eseguiamo i task
             for tool_call in ai_msg.tool_calls:
                 tool_name = tool_call["name"].lower()
-                if tool_name in tool_map:
-                    selected_tool = tool_map[tool_name]
-                    print(f"--- Eseguendo tool LangChain: {tool_name} ---")
-                    # Invocazione del tool e concatenazione del messaggio di output
-                    tool_output = selected_tool.invoke(tool_call["args"])
-                    print(f"--- Output del tool: {tool_output} ---")
-                    return tool_output
-                    #messages.append(ToolMessage(content=str(tool_output), tool_call_id=tool_call["id"]))
+                # Cerchiamo il tool per nome in modo case-insensitive
+                selected_tool = tool_map.get(tool_name)
+                
+                if selected_tool:
+                    print(f"--- Eseguendo tool: {tool_name} ---")
+                    try:
+                        tool_output = selected_tool.invoke(tool_call["args"])
+                        print(f"--- Risultato del tool: {tool_output} ---")
+                        messages.append(ToolMessage(content=str(tool_output), tool_call_id=tool_call["id"]))
+                    except Exception as te:
+                        error_text = f"Errore nell'esecuzione del tool {tool_name}: {te}"
+                        print(error_text)
+                        messages.append(ToolMessage(content=error_text, tool_call_id=tool_call["id"]))
+                else:
+                    error_text = f"Tool '{tool_name}' richiesto ma non trovato."
+                    print(error_text)
+                    messages.append(ToolMessage(content=error_text, tool_call_id=tool_call["id"]))
+        
+        # Sintesi vocale e log della risposta finale
+        if final_answer:
+            speak(final_answer)
+        else:
+            print("--- Nessuna risposta testuale ricevuta dall'LLM. ---")
             
-            # Seconda chiamata dopo che i tool sono stati eseguiti per generare la risposta finale
-            #final_msg = llm_with_tools.invoke(messages)
-            #return final_msg.content
-            """
-        print("Risposta completa: " + complete_response)
-        return complete_response
+        print("Risposta completa: " + final_answer)
+        return final_answer
+        
     except Exception as e:
-        print(f"Errore durante l'interazione con l'LLM via LangChain: {e}")
-        return f"Spiacente, ho avuto un intoppo tecnico con il mio cervello LangChain: {e}"
+        error_msg = f"Eccezione duranteask_llm2: {e}"
+        print(error_msg)
+        return error_msg
+
 
 # Configuration
 MODEL_PATH = "model"
@@ -271,7 +289,7 @@ def start_assistant(debug=False):
                 print(f"Analisi richiesta: '{text}'")
                 # In modalità debug saltiamo i thinking phrases per velocità o li teniamo?
                 # Per ora saltiamo sd e vosk
-                response = ask_llm(text)
+                response = ask_llm2(text)
                 
             except KeyboardInterrupt:
                 break
@@ -335,7 +353,7 @@ def start_assistant(debug=False):
                         print(f"DEBUG: Sentito -> '{text}'")
                         print(f"Analisi richiesta: '{text}'")
                         speak(random.choice(THINKING_PHRASES))
-                        response = ask_llm(text)
+                        response = ask_llm2(text)
                         #speak(response)
                         
                         # Svuota la coda
