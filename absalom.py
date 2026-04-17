@@ -20,9 +20,7 @@ from dotenv import load_dotenv
 
 # Carica variabili d'ambiente da .env
 # LLM Configuration
-LLM_PROVIDER = "ollama-local" # "ollama-local" or "anthropic"
-OLLAMA_MODEL = "qwen3:1.7b"
-ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
+
 load_dotenv()
 
 
