@@ -1,5 +1,6 @@
 import os
 import sys
+import argparse
 import re
 import json
 import queue
@@ -23,6 +24,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# LLM Configuration
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama-local")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:1.5b")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-haiku-20240307")
 
 BASE_URL = "http://127.0.0.1:5000"
 
@@ -244,12 +249,32 @@ def download_model():
     os.remove(zip_path)
     print("Modello pronto.\n")
 
-def start_assistant():
+def start_assistant(debug=False):
     bootstrap_model()
-    #response = ask_llm("Cosa ti piace mangiare?")
-    #print(f"Absalom dice: '{response}'")
-    #response = ask_llm("che ore sono?")
-    #print(f"Absalom dice: '{response}'")
+    
+    if debug:
+        print("\n>>> Absalom OS avviato in modalità DEBUG (input da tastiera).")
+        print("Scrivi qualcosa per parlare con Absalom (o 'esci' per terminare):")
+        while True:
+            try:
+                text = input("\nTu: ")
+                if not text.strip():
+                    continue
+                if text.lower() in ["esci", "quit", "exit"]:
+                    break
+                
+                print(f"Analisi richiesta: '{text}'")
+                # In modalità debug saltiamo i thinking phrases per velocità o li teniamo?
+                # Per ora saltiamo sd e vosk
+                response = ask_llm(text)
+                
+            except KeyboardInterrupt:
+                break
+            except EOFError:
+                break
+        print("\nUscita dalla modalità DEBUG.")
+        return
+
     if not os.path.exists(MODEL_PATH):
         download_model()
 
@@ -325,4 +350,8 @@ def start_assistant():
         print(f"\nErrore durante l'esecuzione: {e}")
 
 if __name__ == "__main__":
-    start_assistant()
+    parser = argparse.ArgumentParser(description="Absalom OS Assistant")
+    parser.add_argument("--debug", action="store_true", help="Avvia in modalità debug (input da tastiera)")
+    args = parser.parse_args()
+    
+    start_assistant(debug=args.debug)
