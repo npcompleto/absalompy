@@ -1,3 +1,4 @@
+import time
 import os
 import sys
 import argparse
@@ -18,6 +19,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 from tools.time_tool import get_current_time
+from tools.axios_tool import axios_sync
 from dotenv import load_dotenv
 
 # Carica variabili d'ambiente da .env
@@ -32,7 +34,44 @@ ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-haiku-20240307")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 GOOGLE_MODEL = os.getenv("GOOGLE_MODEL", "gemini-2.0-flash")
 
+PIPER_MODEL_DIR = "models/piper"
+PIPER_MODEL_NAME = "it_IT-paola-medium.onnx"
+PIPER_MODEL_PATH = os.path.join(PIPER_MODEL_DIR, PIPER_MODEL_NAME)
+PIPER_CONFIG_PATH = PIPER_MODEL_PATH + ".json"
+PIPER_MODEL_URL = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/it/it_IT/paola/medium/{PIPER_MODEL_NAME}?download=true"
+PIPER_CONFIG_URL = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/it/it_IT/paola/medium/{PIPER_MODEL_NAME}.json?download=true"
+
 BASE_URL = "http://127.0.0.1:5000"
+
+MODEL_PATH = "model"
+MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-it-0.22.zip"
+WAKE_WORDS = ["absalom","absalon","assalom","assalon"]
+SLEEP_PHRASES = [
+    "Vado in standby",
+    "Buonanotte",
+    "Che sonno! Buonanotte.",
+    "Ci sentiamo dopo",
+    "A dopo"
+]
+
+THINKING_PHRASES = [
+    "Fammi pensare",
+    "Un momento",
+    "Ci penso un attimo",
+    "Ok!"
+]
+SAMPLE_RATE = 16000
+
+# Audio queue and status
+q = queue.Queue()
+is_busy = False
+is_awake = False
+is_speaking = False
+INACTIVITY_TIMEOUT = 120  # 10 secondi di inattività per lo standby
+last_interaction_time = 0
+
+_piper_voice = None
+last_interaction_time = 0
 
 def blink():
     print("Inviando comando blink...")
@@ -58,14 +97,9 @@ def set_speaking(speaking_status):
     except Exception as e:
         print(f"Errore set_speaking: {e}")
 
-PIPER_MODEL_DIR = "models/piper"
-PIPER_MODEL_NAME = "it_IT-paola-medium.onnx"
-PIPER_MODEL_PATH = os.path.join(PIPER_MODEL_DIR, PIPER_MODEL_NAME)
-PIPER_CONFIG_PATH = PIPER_MODEL_PATH + ".json"
-PIPER_MODEL_URL = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/it/it_IT/paola/medium/{PIPER_MODEL_NAME}?download=true"
-PIPER_CONFIG_URL = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/it/it_IT/paola/medium/{PIPER_MODEL_NAME}.json?download=true"
 
-_piper_voice = None
+
+
 
 def get_piper_voice():
     global _piper_voice
@@ -128,7 +162,7 @@ def get_persona():
 
 
 # Lista dei tool disponibili per LangChain
-tools = [get_current_time]
+tools = [get_current_time, axios_sync]
 # Mappatura per l'esecuzione automatica dei tool basata sul nome
 tool_map = {tool.name: tool for tool in tools}
 
@@ -145,7 +179,7 @@ def bootstrap_model():
             print("Assicurati che Ollama sia in esecuzione e che il modello sia installato.")
     
 
-def ask_llm2(user_input):
+def ask_llm(user_input):
     """Interfaccia l'assistente con l'LLM configurato, gestendo i tool e la personalità."""
     system_prompt = get_persona()
     
@@ -215,39 +249,11 @@ def ask_llm2(user_input):
         return final_answer
         
     except Exception as e:
-        error_msg = f"Eccezione duranteask_llm2: {e}"
+        error_msg = f"Eccezione duranteask_llm: {e}"
         print(error_msg)
         return error_msg
 
 
-# Configuration
-MODEL_PATH = "model"
-MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-it-0.22.zip"
-WAKE_WORDS = ["absalom","absalon","assalom","assalon"]
-SLEEP_PHRASES = [
-    "Vado in standby",
-    "Buonanotte",
-    "Sogni digitali",
-    "Circuiti a riposo",
-    "Off...",
-    "Mi aggiusto i cavi",
-    "A dopo",
-    "Batteria in risparmio"
-]
-
-THINKING_PHRASES = [
-    "Fammi pensare",
-    "Un momento",
-    "Ci penso un attimo",
-    "Ok!"
-]
-SAMPLE_RATE = 16000
-
-# Audio queue and status
-q = queue.Queue()
-is_busy = False
-is_awake = False
-is_speaking = False
 
 def callback(indata, frames, time, status):
     """This is called (from a separate thread) for each audio block."""
@@ -289,7 +295,7 @@ def start_assistant(debug=False):
                 print(f"Analisi richiesta: '{text}'")
                 # In modalità debug saltiamo i thinking phrases per velocità o li teniamo?
                 # Per ora saltiamo sd e vosk
-                response = ask_llm2(text)
+                response = ask_llm(text)
                 
             except KeyboardInterrupt:
                 break
@@ -303,58 +309,97 @@ def start_assistant(debug=False):
 
     # Initialize model
     model = Model(MODEL_PATH)
-    rec = KaldiRecognizer(model, SAMPLE_RATE, json.dumps(WAKE_WORDS))
+    # Avviamo con un recognizer completo per catturare sia la wakeword che il comando insieme
+    rec = KaldiRecognizer(model, SAMPLE_RATE)
 
     print(f"\n>>> Absalom OS avviato. In ascolto per la parola chiave: '{WAKE_WORDS}'...")
 
     global is_busy
     global is_awake
+    global last_interaction_time
 
     try:
         with sd.RawInputStream(samplerate=SAMPLE_RATE, blocksize=8000, dtype='int16',
                                channels=1, callback=callback):
             while True:
-                data = q.get()
+                # Timer di inattività: se sveglio e timeout superato, vai in standby
+                if is_awake and (time.time() - last_interaction_time > INACTIVITY_TIMEOUT):
+                    print("\n[!] Timeout di inattività raggiunto. Standby...")
+                    phrase = random.choice(SLEEP_PHRASES)
+                    speak(phrase)
+                    set_mode("asleep")
+                    is_awake = False
+                
+                try:
+                    data = q.get(timeout=5) # Timeout per permettere il controllo dell'inattività
+                except queue.Empty:
+                    continue
+
                 if rec.AcceptWaveform(data):
                     result = json.loads(rec.Result())
-                    text = result.get("text", "").lower()
+                    text = result.get("text", "").lower().strip()
+                    
+                    if not text:
+                        continue
+                    
                     print(f"DEBUG: Sentito -> '{text}'")
-                    if any(word in text for word in WAKE_WORDS):
-                        print("\n[!] Ti ho sentito")
+                    
+                    # Cerca se nel testo è presente una delle wakeword
+                    trigger_word = next((w for w in WAKE_WORDS if w in text), None)
+                    
+                    if trigger_word:
+                        print(f"\n[!] Wakeword '{trigger_word}' rilevata!")
+                        last_interaction_time = time.time()
+                        
+                        # Estrae il comando rimuovendo la wakeword
+                        command = text.replace(trigger_word, "").strip()
+                        # Rimuove eventuale punteggiatura iniziale/finale dal comando
+                        command = re.sub(r'^[,.!?;:\s]+|[,.!?;:\s]+$', '', command)
+                        
+                        if not is_awake:
+                            is_awake = True
+                            set_mode("awake")
+                            print("Svegliato dalla wakeword.")
+                        
                         is_busy = True
                         set_busy(True)
-                        # Identifica quale parola chiave è stata usata per rimuoverla dal prompt
-                        trigger_word = next((w for w in WAKE_WORDS if w in text), None)
-                        print("\n[!] Ti ho sentito")
                         
-                        set_mode("awake")
-                        is_awake = True
-                        speak("Eccomi!")
+                        if command:
+                            if command == "addormentati":
+                                phrase = random.choice(SLEEP_PHRASES)
+                                speak(phrase)
+                                set_mode("asleep")
+                                is_awake = False
+                            else:
+                                print(f"Comando diretto rilevato: '{command}'")
+                                speak(random.choice(THINKING_PHRASES))
+                                ask_llm(command)
+                        else:
+                            # Solo wakeword pronunciata
+                            speak("Eccomi!")
                         
-                        # reset recognizer  
-                        rec = KaldiRecognizer(model, SAMPLE_RATE)
-                        
-                        
-                        # Svuota la coda per evitare di processare audio accumulato
+                        # Svuota la coda per evitare loop di feedback o audio accumulato
                         while not q.empty():
                             try: q.get_nowait()
                             except queue.Empty: break
                         is_busy = False
                         set_busy(False)
-                    elif is_awake and text == "addormentati":
-                        rec = KaldiRecognizer(model, SAMPLE_RATE, json.dumps(WAKE_WORDS))
-                        phrase = random.choice(SLEEP_PHRASES)
-                        speak(phrase)
-                        set_mode("asleep")
-                        is_awake = False
-                    elif is_awake and text != "" and text != " ":
+                        
+                    elif is_awake:
+                        # Se siamo già svegli, processiamo tutto come comando (stile sessione)
+                        last_interaction_time = time.time()
                         is_busy = True
                         set_busy(True)
-                        print(f"DEBUG: Sentito -> '{text}'")
-                        print(f"Analisi richiesta: '{text}'")
-                        speak(random.choice(THINKING_PHRASES))
-                        response = ask_llm2(text)
-                        #speak(response)
+                        
+                        if text == "addormentati":
+                            phrase = random.choice(SLEEP_PHRASES)
+                            speak(phrase)
+                            set_mode("asleep")
+                            is_awake = False
+                        else:
+                            print(f"Analisi richiesta (sessione): '{text}'")
+                            speak(random.choice(THINKING_PHRASES))
+                            ask_llm(text)
                         
                         # Svuota la coda
                         while not q.empty():
@@ -362,10 +407,11 @@ def start_assistant(debug=False):
                             except queue.Empty: break
                         is_busy = False
                         set_busy(False)
-                else:
-                    # Partial record?
-                    # partial = json.loads(rec.PartialResult())
-                    pass
+                    
+                    else:
+                        # Se siamo addormentati e non sentiamo la wakeword, ignoriamo il testo
+                        print(f"DEBUG: Testo ignorato (nessuna wakeword): '{text}'")
+                        pass
 
     except KeyboardInterrupt:
         print("\nSpegni assistente...")
