@@ -3,6 +3,8 @@
 # Vai nella directory dello script
 cd "$(dirname "$0")"
 
+git pull
+
 # Crea l'ambiente virtuale se non esiste
 if [ ! -d "venv" ]; then
     echo "--- Creazione ambiente virtuale... ---"
