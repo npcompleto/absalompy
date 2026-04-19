@@ -18,9 +18,11 @@ from langchain_ollama import ChatOllama
 from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
-from tools.time_tool import get_current_time
-from tools.axios_tool import axios_sync
+from tools.school_tool import add_school_event, list_school_events
+from tools.time_tool import get_next_week_start_date
+from db import init_db
 from dotenv import load_dotenv
+from datetime import datetime
 
 # Carica variabili d'ambiente da .env
 # LLM Configuration
@@ -60,6 +62,14 @@ THINKING_PHRASES = [
     "Ci penso un attimo",
     "Ok!"
 ]
+
+TOOL_PHRASES = [
+    "Ancora un attimo",
+    "Devo verificare ancora una cosa",
+    "Ci sono quasi",
+    "Controllo prima una cosa"
+]
+
 SAMPLE_RATE = 16000
 
 # Audio queue and status
@@ -72,6 +82,11 @@ last_interaction_time = 0
 
 _piper_voice = None
 last_interaction_time = 0
+
+# Lista dei tool disponibili per LangChain
+tools = [list_school_events, get_next_week_start_date]
+# Mappatura per l'esecuzione automatica dei tool basata sul nome
+tool_map = {tool.name: tool for tool in tools}
 
 def blink():
     print("Inviando comando blink...")
@@ -113,6 +128,18 @@ def get_piper_voice():
         _piper_voice = PiperVoice.load(PIPER_MODEL_PATH, config_path=PIPER_CONFIG_PATH)
     return _piper_voice
 
+def play_audio(filepath):
+    """Riproduce un file audio specificato."""
+    if os.path.exists(filepath):
+        try:
+            subprocess.run(["ffplay", "-nodisp", "-autoexit", filepath], 
+                           stderr=subprocess.DEVNULL, 
+                           stdout=subprocess.DEVNULL)
+        except Exception as e:
+            print(f"Errore durante la riproduzione di {filepath}: {e}")
+    else:
+        print(f"File audio non trovato: {filepath}")
+
 def speak(text):
     global is_speaking
     
@@ -121,7 +148,7 @@ def speak(text):
         text = str(text)
     
     # Rimuove emoji e caratteri speciali che il TTS non può leggere bene
-    text = re.sub(r'[^\w\s\d.,!?;:()\'\"-]', '', text)
+    text = re.sub(r'[^\w\s\d.,!?;:()\'\"-/]', '', text)
     
     print(f"Absalom dice: '{text}'")
     voice = get_piper_voice()
@@ -138,9 +165,7 @@ def speak(text):
         is_speaking = True
         set_speaking(True)
         # ffplay handles the playback
-        subprocess.run(["ffplay", "-nodisp", "-autoexit", filename], 
-                       stderr=subprocess.DEVNULL, 
-                       stdout=subprocess.DEVNULL)
+        play_audio(filename)
     except Exception as e:
         print(f"Errore durante la sintesi vocale: {e}")
     finally:
@@ -160,11 +185,33 @@ def get_persona():
         print(f"Errore nel caricamento della persona: {e}")
     return persona
 
+def save_to_memory(user_input, absalom_response):
+    """Salva l'interazione nella memoria persistente in formato yyyy-MM-DD.txt."""
+    try:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        folder = os.path.join("persona", "memory")
+        os.makedirs(folder, exist_ok=True)
+        filepath = os.path.join(folder, f"{date_str}.txt")
+        
+        with open(filepath, "a", encoding="utf-8") as f:
+            f.write(f"Utente: {user_input}\n")
+            f.write(f"Absalom: {absalom_response}\n\n")
+    except Exception as e:
+        print(f"Errore durante il salvataggio della memoria: {e}")
 
-# Lista dei tool disponibili per LangChain
-tools = [get_current_time, axios_sync]
-# Mappatura per l'esecuzione automatica dei tool basata sul nome
-tool_map = {tool.name: tool for tool in tools}
+def get_today_memory():
+    """Recupera la memoria della giornata corrente se esistente."""
+    try:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        filepath = os.path.join("persona", "memory", f"{date_str}.txt")
+        if os.path.exists(filepath):
+            with open(filepath, "r", encoding="utf-8") as f:
+                return f.read()
+    except Exception as e:
+        print(f"Errore nel recupero della memoria: {e}")
+    return ""
+
+
 
 def bootstrap_model():
     print("--- Avvio bootstrap del modello, solo se locale... ---")
@@ -182,6 +229,12 @@ def bootstrap_model():
 def ask_llm(user_input):
     """Interfaccia l'assistente con l'LLM configurato, gestendo i tool e la personalità."""
     system_prompt = get_persona()
+    
+    # Aggiunge la memoria odierna al prompt di sistema come contesto
+    today_memory = get_today_memory()
+    if today_memory:
+        system_prompt += "\n Oggi è il " + datetime.now().strftime("%Y-%m-%d") + " ed è " + datetime.now().strftime("%A") + ".\n"
+        system_prompt += f"\nQui trovi la cronologia della conversazione di oggi per darti contesto:\n{today_memory}\n"
     
     # Inizializzazione del modello LangChain corretto
     try:
@@ -219,13 +272,23 @@ def ask_llm(user_input):
                 break
                 
             # Se l'LLM ha richiesto l'uso di tool, eseguiamo i task
+            loop_count = 0
+            MAX_LOOP = 3
             for tool_call in ai_msg.tool_calls:
+                loop_count += 1
+                if loop_count > MAX_LOOP:
+                    return "Sono andato in confusione. Riproviamo?"
                 tool_name = tool_call["name"].lower()
                 # Cerchiamo il tool per nome in modo case-insensitive
                 selected_tool = tool_map.get(tool_name)
                 
                 if selected_tool:
                     print(f"--- Eseguendo tool: {tool_name} ---")
+                    if tool_name == "list_school_events":
+                        speak("Sto controllando sul registro elettronico.")
+                    else:
+                        speak(random.choice(TOOL_PHRASES))
+                        
                     try:
                         tool_output = selected_tool.invoke(tool_call["args"])
                         print(f"--- Risultato del tool: {tool_output} ---")
@@ -239,9 +302,9 @@ def ask_llm(user_input):
                     print(error_text)
                     messages.append(ToolMessage(content=error_text, tool_call_id=tool_call["id"]))
         
-        # Sintesi vocale e log della risposta finale
+        # Sintesi vocale, salvataggio memoria e log della risposta finale
         if final_answer:
-            speak(final_answer)
+            save_to_memory(user_input, final_answer)
         else:
             print("--- Nessuna risposta testuale ricevuta dall'LLM. ---")
             
@@ -279,11 +342,18 @@ def download_model():
     print("Modello pronto.\n")
 
 def start_assistant(debug=False):
+    # Esegui il suono di avvio
+    print("--- Riproduzione suono di avvio ---")
+    play_audio("sounds/startup.mp3")
+    init_db()
     bootstrap_model()
+    
+    
     
     if debug:
         print("\n>>> Absalom OS avviato in modalità DEBUG (input da tastiera).")
         print("Scrivi qualcosa per parlare con Absalom (o 'esci' per terminare):")
+        set_mode("awake")
         while True:
             try:
                 text = input("\nTu: ")
@@ -296,6 +366,7 @@ def start_assistant(debug=False):
                 # In modalità debug saltiamo i thinking phrases per velocità o li teniamo?
                 # Per ora saltiamo sd e vosk
                 response = ask_llm(text)
+                speak(response)
                 
             except KeyboardInterrupt:
                 break
