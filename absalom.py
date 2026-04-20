@@ -47,7 +47,7 @@ BASE_URL = "http://127.0.0.1:5000"
 
 MODEL_PATH = "model"
 MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-it-0.22.zip"
-WAKE_WORDS = ["absalom","absalon","assalom","assalon","okron","ok ron", "ok on","ciaoron","ciao ron"]
+WAKE_WORDS = ["absalom","absalon","assalom","assalon","okron","ok ron", "ok on","ciaoron","ciao ron","sauron"]
 SLEEP_PHRASES = [
     "Vado in standby",
     "Buonanotte",
@@ -544,29 +544,6 @@ def start_assistant(debug=False):
                         is_busy = False
                         set_busy(False)
                         
-                    elif is_awake:
-                        # Se siamo già svegli, processiamo tutto come comando (stile sessione)
-                        last_interaction_time = time.time()
-                        is_busy = True
-                        set_busy(True)
-                        
-                        if text == "addormentati":
-                            phrase = random.choice(SLEEP_PHRASES)
-                            speak(phrase)
-                            set_mode("asleep")
-                            is_awake = False
-                        else:
-                            print(f"Analisi richiesta (sessione): '{text}'")
-                            speak(random.choice(THINKING_PHRASES))
-                            ask_llm(text)
-                        
-                        # Svuota la coda
-                        while not q.empty():
-                            try: q.get_nowait()
-                            except queue.Empty: break
-                        is_busy = False
-                        set_busy(False)
-                    
                     else:
                         # Se siamo addormentati e non sentiamo la wakeword, ignoriamo il testo
                         print(f"DEBUG: Testo ignorato (nessuna wakeword): '{text}'")
