@@ -46,7 +46,7 @@ PIPER_CONFIG_URL = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/it
 BASE_URL = "http://127.0.0.1:5000"
 
 MODEL_PATH = "model"
-MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-it-0.22.zip"
+MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-it-0.22.zip"
 WAKE_WORDS = ["absalom","absalon","assalom","assalon","okron","ok ron", "ok on","ciaoron","ciao ron","sauron", "ciao", "ciao rom"]
 SLEEP_PHRASES = [
     "Vado in standby",
@@ -393,7 +393,7 @@ def download_model():
         zip_ref.extractall(".")
     
     # Rename extracted folder to 'model'
-    extracted_folder = "vosk-model-small-it-0.22"
+    extracted_folder = "vosk-model-it-0.22"
     if os.path.exists(extracted_folder):
         os.rename(extracted_folder, MODEL_PATH)
     
