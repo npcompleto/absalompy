@@ -4,6 +4,8 @@ import threading
 import random
 import os
 import subprocess
+import glob
+import platform
 
 app = Flask(__name__)
 
@@ -48,6 +50,10 @@ threading.Thread(target=auto_blink_loop, daemon=True).start()
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/admin')
+def admin():
+    return render_template('admin.html')
 
 @app.route('/status')
 def get_status():
@@ -103,13 +109,63 @@ def control():
         
     return jsonify({"status": "error", "message": "Invalid parameters"}), 400
 
+# --- Admin API for Persona & Memory ---
+
+@app.route('/api/identity', methods=['GET', 'POST'])
+def handle_identity():
+    id_path = os.path.join("persona", "Identity.md")
+    if request.method == 'POST':
+        data = request.get_json()
+        if 'content' in data:
+            with open(id_path, "w", encoding="utf-8") as f:
+                f.write(data['content'])
+            return jsonify({"status": "success"})
+        return jsonify({"status": "error", "message": "No content provided"}), 400
+    
+    if os.path.exists(id_path):
+        with open(id_path, "r", encoding="utf-8") as f:
+            return jsonify({"content": f.read()})
+    return jsonify({"content": ""})
+
+@app.route('/api/memory', methods=['GET'])
+def list_memory_files():
+    memory_dir = os.path.join("persona", "memory")
+    if not os.path.exists(memory_dir):
+        return jsonify({"dates": []})
+    
+    files = glob.glob(os.path.join(memory_dir, "*.txt"))
+    dates = [os.path.basename(f).replace(".txt", "") for f in files]
+    return jsonify({"dates": sorted(dates, reverse=True)})
+
+@app.route('/api/memory/<date>', methods=['GET', 'POST'])
+def handle_memory(date):
+    mem_path = os.path.join("persona", "memory", f"{date}.txt")
+    if request.method == 'POST':
+        data = request.get_json()
+        if 'content' in data:
+            os.makedirs(os.path.dirname(mem_path), exist_ok=True)
+            with open(mem_path, "w", encoding="utf-8") as f:
+                f.write(data['content'])
+            return jsonify({"status": "success"})
+        return jsonify({"status": "error", "message": "No content provided"}), 400
+    
+    if os.path.exists(mem_path):
+        with open(mem_path, "r", encoding="utf-8") as f:
+            return jsonify({"content": f.read()})
+    return jsonify({"error": "File not found"}), 404
+
 @app.route('/stop_audio', methods=['POST'])
 def stop_audio():
     """Interrompe la riproduzione audio uccidendo il processo ffplay."""
     try:
-        # pkill restituisce 0 se ha trovato processi da uccidere, 1 altrimenti.
-        # Entrambi sono accettabili per noi.
-        subprocess.run(["pkill", "ffplay"], stderr=subprocess.DEVNULL)
+        if platform.system() == "Windows":
+            # Su Windows usiamo taskkill. /F forza la chiusura, /IM specifica il nome immagine, /T chiude i processi figli
+            subprocess.run(["taskkill", "/F", "/IM", "ffplay.exe", "/T"], 
+                           stderr=subprocess.DEVNULL, 
+                           stdout=subprocess.DEVNULL)
+        else:
+            # Su Linux/Unix usiamo pkill
+            subprocess.run(["pkill", "ffplay"], stderr=subprocess.DEVNULL)
         return jsonify({"status": "success", "message": "Audio stop signal sent"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500

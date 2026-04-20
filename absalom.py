@@ -164,43 +164,62 @@ def get_piper_voice():
     return _piper_voice
 
 def play_audio(filepath):
-    """Riproduce un file audio specificato."""
+    """Riproduce un file audio specificato. Ritorna il codice di uscita del processo."""
     if os.path.exists(filepath):
         try:
-            subprocess.run(["ffplay", "-nodisp", "-autoexit", filepath], 
+            process = subprocess.run(["ffplay", "-nodisp", "-autoexit", filepath], 
                            stderr=subprocess.DEVNULL, 
                            stdout=subprocess.DEVNULL)
+            return process.returncode
         except Exception as e:
             print(f"Errore durante la riproduzione di {filepath}: {e}")
+            return -1
     else:
         print(f"File audio non trovato: {filepath}")
+        return -1
 
 def speak(text):
     global is_speaking
     
-    # Assicura che l'input sia una stringa (evita errori se l'LLM restituisce una lista di blocchi)
     if not isinstance(text, str):
         text = str(text)
     
-    # Rimuove emoji e caratteri speciali che il TTS non può leggere bene
+    # Rimuove emoji e caratteri speciali
     text = re.sub(r'[^\w\s\d.,!?;:()\'\"-/]', '', text)
     
-    print(f"Absalom dice: '{text}'")
+    # Spezzetta il testo in periodi (usa lookbehind per non rimuovere il delimitatore o semplicemente splitta)
+    # Questa regex splitta dopo i caratteri di punteggiatura seguiti da spazio
+    sentences = [s.strip() for s in re.split(r'(?<=[!.;?])\s+', text) if s.strip()]
+    
+    if not sentences:
+        return
+
+    print(f"Absalom dice: '{text}' (in {len(sentences)} pezzi)")
     voice = get_piper_voice()
-    filename = "speech.wav"
+    filename = "speech_chunk.wav"
+    
+    is_speaking = True
+    set_speaking(True)
+    
     try:
-        with wave.open(filename, "wb") as wav_file:
-            # Sostituisci la sintesi diretta con l'iteratore corretta
-            for i, chunk in enumerate(voice.synthesize(text)):
-                if i == 0:
-                    wav_file.setnchannels(chunk.sample_channels)
-                    wav_file.setsampwidth(chunk.sample_width)
-                    wav_file.setframerate(chunk.sample_rate)
-                wav_file.writeframes(chunk.audio_int16_bytes)
-        is_speaking = True
-        set_speaking(True)
-        # ffplay handles the playback
-        play_audio(filename)
+        for i, sentence in enumerate(sentences):
+            print(f"Sintesi pezzo {i+1}/{len(sentences)}: '{sentence}'")
+            with wave.open(filename, "wb") as wav_file:
+                for j, chunk in enumerate(voice.synthesize(sentence)):
+                    if j == 0:
+                        wav_file.setnchannels(chunk.sample_channels)
+                        wav_file.setsampwidth(chunk.sample_width)
+                        wav_file.setframerate(chunk.sample_rate)
+                    wav_file.writeframes(chunk.audio_int16_bytes)
+            
+            # Riproduce il pezzo e controlla se è stato interrotto (pkill)
+            return_code = play_audio(filename)
+            
+            # Se il processo è stato ucciso (non-zero return code), interrompiamo la lettura dei pezzi successivi
+            if return_code != 0:
+                print(f"Riproduzione interrotta al pezzo {i+1} (RC: {return_code})")
+                break
+                
     except Exception as e:
         print(f"Errore durante la sintesi vocale: {e}")
     finally:
@@ -508,7 +527,8 @@ def start_assistant(debug=False):
                             else:
                                 print(f"Comando diretto rilevato: '{command}'")
                                 speak(random.choice(THINKING_PHRASES))
-                                ask_llm(command)
+                                response = ask_llm(command)
+                                speak(response)
                         else:
                             # Solo wakeword pronunciata
                             speak("Eccomi!")
