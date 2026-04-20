@@ -47,7 +47,7 @@ BASE_URL = "http://127.0.0.1:5000"
 
 MODEL_PATH = "model"
 MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-it-0.22.zip"
-WAKE_WORDS = ["absalom","absalon","assalom","assalon"]
+WAKE_WORDS = ["absalom","absalon","assalom","assalon","okron","ok ron", "ok on","ciaoron","ciao ron"]
 SLEEP_PHRASES = [
     "Vado in standby",
     "Buonanotte",
