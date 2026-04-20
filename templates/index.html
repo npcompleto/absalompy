@@ -140,6 +140,33 @@
             }
         }
 
+        .eye.loading {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin-top: calc(var(--eye-height) / 2 - 40px);
+            margin-bottom: calc(var(--eye-height) / 2 - 40px);
+            background: transparent;
+            border: 8px solid rgba(0, 242, 255, 0.1);
+            border-top: 8px solid var(--eye-color);
+            box-shadow: 0 0 30px var(--eye-shadow);
+            animation: spin 1s linear infinite !important;
+            border: none;
+        }
+
+        .eye.angry {
+            transform: translateY(20px) rotate(15deg);
+        }
+
+        #eye-right.angry {
+            transform: translateY(20px) rotate(-15deg);
+        }
+
+        .eye.loading::after {
+            display: none;
+            /* Hide reflection during loading for a cleaner spinner look */
+        }
+
         @keyframes pulse-text {
 
             0%,
@@ -162,6 +189,7 @@
             height: 100px;
             transition: all 0.3s ease;
             opacity: 0.8;
+            cursor: pointer;
         }
 
         .lip {
@@ -180,6 +208,17 @@
 
         #lip-lower {
             d: path("M 30 52 Q 100 52 170 52");
+        }
+
+        /* Sad state (downward curve) */
+        .mouth.sad #lip-upper,
+        .mouth.angry #lip-upper {
+            d: path("M 30 70 Q 100 40 170 70");
+        }
+
+        .mouth.sad #lip-lower,
+        .mouth.angry #lip-lower {
+            d: path("M 30 75 Q 100 45 170 75");
         }
 
         /* Speaking animation */
@@ -222,10 +261,6 @@
 </head>
 
 <body>
-    <div id="loader">
-        <div class="spinner"></div>
-        <!--div class="loader-text">Analisi in corso</div-->
-    </div>
     <div class="face-container">
         <div id="eye-left" class="eye"></div>
         <div id="eye-right" class="eye"></div>
@@ -240,7 +275,6 @@
         const eyeLeft = document.getElementById('eye-left');
         const eyeRight = document.getElementById('eye-right');
         const statusText = document.getElementById('status');
-        const loader = document.getElementById('loader');
         const mouthSvg = document.getElementById('mouth-svg');
 
         function updateEyes(state) {
@@ -261,11 +295,13 @@
                 updateEyes(data.eyes);
                 statusText.innerText = `System: ${data.eyes}`;
 
-                // Toggle Loader
-                if (data.busy) {
-                    loader.style.display = 'flex';
+                // Toggle Loading State on Eyes (independent from busy)
+                if (data.loading) {
+                    eyeLeft.classList.add('loading');
+                    eyeRight.classList.add('loading');
                 } else {
-                    loader.style.display = 'none';
+                    eyeLeft.classList.remove('loading');
+                    eyeRight.classList.remove('loading');
                 }
 
                 // Toggle Speaking (Mouth Animation)
@@ -274,6 +310,24 @@
                 } else {
                     mouthSvg.classList.remove('speaking');
                 }
+
+                // Toggle Angry Face
+                if (data.angry) {
+                    eyeLeft.classList.add('angry');
+                    eyeRight.classList.add('angry');
+                    mouthSvg.classList.add('angry');
+                } else {
+                    eyeLeft.classList.remove('angry');
+                    eyeRight.classList.remove('angry');
+                    mouthSvg.classList.remove('angry');
+                }
+
+                // Toggle Sad Face
+                if (data.sad) {
+                    mouthSvg.classList.add('sad');
+                } else {
+                    mouthSvg.classList.remove('sad');
+                }
             } catch (err) {
                 console.error("Polling error:", err);
             }
@@ -281,6 +335,16 @@
 
         // Poll every 100ms for responsiveness
         setInterval(pollStatus, 100);
+
+        // Click on mouth to stop audio
+        mouthSvg.addEventListener('click', async () => {
+            console.log("Mouth clicked: stopping audio...");
+            try {
+                await fetch('/stop_audio', { method: 'POST' });
+            } catch (err) {
+                console.error("Error stopping audio:", err);
+            }
+        });
 
         // Initial blink animation sequence for "boot up"
         setTimeout(() => {

@@ -112,6 +112,24 @@ def set_speaking(speaking_status):
     except Exception as e:
         print(f"Errore set_speaking: {e}")
 
+def set_loading(loading_status):
+    try:
+        requests.post(f"{BASE_URL}/control", json={"loading": loading_status})
+    except Exception as e:
+        print(f"Errore set_loading: {e}")
+
+def set_angry(angry_status):
+    try:
+        requests.post(f"{BASE_URL}/control", json={"angry": angry_status})
+    except Exception as e:
+        print(f"Errore set_angry: {e}")
+
+def set_sad(sad_status):
+    try:
+        requests.post(f"{BASE_URL}/control", json={"sad": sad_status})
+    except Exception as e:
+        print(f"Errore set_sad: {e}")
+
 
 
 
@@ -344,12 +362,13 @@ def download_model():
 def start_assistant(debug=False):
     # Esegui il suono di avvio
     print("--- Riproduzione suono di avvio ---")
+    set_loading(True)
     play_audio("sounds/startup.mp3")
     init_db()
     bootstrap_model()
     
     
-    
+    set_loading(False)
     if debug:
         print("\n>>> Absalom OS avviato in modalità DEBUG (input da tastiera).")
         print("Scrivi qualcosa per parlare con Absalom (o 'esci' per terminare):")
@@ -362,6 +381,32 @@ def start_assistant(debug=False):
                 if text.lower() in ["esci", "quit", "exit"]:
                     break
                 
+                if text.lower().startswith("/emo"):
+                    parts = text.split()
+                    if len(parts) < 2:
+                        print("Uso: /emo [sad|nosad|angry|noangry|loading|noloading|awake|asleep|reset]")
+                        continue
+                    
+                    cmd = parts[1].lower()
+                    if cmd == "sad": set_sad(True)
+                    elif cmd == "nosad": set_sad(False)
+                    elif cmd == "angry": set_angry(True)
+                    elif cmd == "noangry": set_angry(False)
+                    elif cmd == "loading": set_loading(True)
+                    elif cmd == "noloading": set_loading(False)
+                    elif cmd == "awake": set_mode("awake")
+                    elif cmd == "asleep": set_mode("asleep")
+                    elif cmd == "reset":
+                        set_sad(False)
+                        set_angry(False)
+                        set_loading(False)
+                        set_busy(False)
+                        set_speaking(False)
+                        set_mode("awake")
+                    else:
+                        print(f"Emozione '{cmd}' non riconosciuta.")
+                    continue
+
                 print(f"Analisi richiesta: '{text}'")
                 # In modalità debug saltiamo i thinking phrases per velocità o li teniamo?
                 # Per ora saltiamo sd e vosk
@@ -388,7 +433,7 @@ def start_assistant(debug=False):
     global is_busy
     global is_awake
     global last_interaction_time
-
+    
     try:
         with sd.RawInputStream(samplerate=SAMPLE_RATE, blocksize=8000, dtype='int16',
                                channels=1, callback=callback):

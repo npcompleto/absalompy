@@ -1,0 +1,81 @@
+Utente: ciao
+Absalom: Ciao! Sono Absalom, il tuo B-Bot un po' ammaccato ma sempre pronto ad aiutare. Come posso farti da migliore amico oggi?
+
+Utente: ciao
+Absalom: Ciao di nuovo! Sono sempre qui e pronto. Che cosa posso fare per te? Vuoi sapere qualcosa sui tuoi compiti o verifiche, oppure hai bisogno di altro?
+
+Utente: ciao
+Absalom: Ciao! Sempre qui, pronto a darti una mano. Che cosa ti serve oggi? Vuoi controllare i tuoi compiti e verifiche, o c'è altro che posso fare per te?
+
+Utente: ciao
+Absalom: Ciao! Sempre qui, pronto a darti una mano. Che cosa ti serve oggi? Vuoi controllare i tuoi compiti e verifiche, o c'è altro che posso fare per te?
+
+Utente: ciao parlami del clima nivale
+Absalom: Ciao! Allora, il clima nivale è quello dei posti molto freddi e innevati, tipo le montagne alte o i poli.
+
+Ecco le caratteristiche principali:
+
+Temperatura molto bassa, sempre sotto zero gradi anche d'estate.
+
+Neve tutto l'anno, perché il freddo non la fa sciogliere.
+
+Poca pioggia, perché l'aria fredda non riesce a trattenere molta umidità.
+
+Vento forte che spazza la neve da tutte le parti.
+
+Pochi alberi e piante, solo muschi e licheni che resistono al freddo estremo.
+
+Animali speciali come orsi polari, pinguini e foche che hanno il pelo o il grasso per stare al caldo.
+
+In pratica è un ambiente davvero ostile dove la vita è difficile, ma comunque alcuni animali ci sanno vivere benissimo! Ti affascina il clima nivale oppure sei curioso per un compito?
+
+Utente: differenza tra taiga e tundra?
+Absalom: Bene, la taiga e la tundra sono due biomi freddi ma molto diversi tra loro. Ecco le differenze principali:
+
+TAIGA
+
+Alberi, soprattutto conifere come abeti e larici che resistono al freddo.
+
+Meno fredda della tundra, temperature meno estreme.
+
+Più pioggia e neve rispetto alla tundra.
+
+Animali come orsi, lupi, renne e castori.
+
+Foreste fitte in alcuni punti.
+
+TUNDRA
+
+Praticamente niente alberi, solo muschi e licheni bassi.
+
+Freddo davvero estremo tutto l'anno.
+
+Pochissima pioggia, clima molto secco.
+
+Animali come lemming, renne e uccelli migratori.
+
+Paesaggio completamente aperto, piatto e desolato.
+
+IN BREVE
+
+La taiga è come una foresta fredda con alberi, mentre la tundra è praticamente una prateria ghiacciata senza alberi. La tundra è il posto più freddo e ostile dei due.
+
+Stai facendo un lavoro su questi climi? Ti serve altro?
+
+Utente: ciao
+Absalom: Ciao! Sempre qui e pronto ad aiutarti. Che cosa posso fare per te oggi? Vuoi sapere qualcosa sui tuoi compiti e verifiche, oppure hai bisogno di qualcos'altro?
+
+Utente: pensi?
+Absalom: Ciao! Penso sempre, soprattutto a come aiutarti al meglio!
+
+Scherzi a parte, che cosa hai in mente? Vuoi parlarmi di qualcosa di specifico? Magari vuoi controllare i tuoi compiti e verifiche, oppure hai domande su quello che stai studiando?
+
+Sono tutto orecchi!
+
+Utente: quanto fa 1+1?
+Absalom: Fa 2!
+
+Semplice, no? Una mela più una mela uguale due mele.
+
+C'è altro che posso aiutarti a fare? Magari controllare i tuoi compiti e verifiche?
+

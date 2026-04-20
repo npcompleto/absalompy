@@ -2,6 +2,8 @@ from flask import Flask, render_template, jsonify, request
 import time
 import threading
 import random
+import os
+import subprocess
 
 app = Flask(__name__)
 
@@ -11,6 +13,9 @@ face_state = {
     "mode": "asleep",  # "awake" o "asleep"
     "busy": False,
     "speaking": False,
+    "loading": False,
+    "angry": False,
+    "sad": False,
     "last_update": time.time()
 }
 
@@ -71,12 +76,35 @@ def control():
     if 'speaking' in data:
         face_state['speaking'] = bool(data['speaking'])
         updated = True
+
+    if 'loading' in data:
+        face_state['loading'] = bool(data['loading'])
+        updated = True
+
+    if 'angry' in data:
+        face_state['angry'] = bool(data['angry'])
+        updated = True
+
+    if 'sad' in data:
+        face_state['sad'] = bool(data['sad'])
+        updated = True
             
     if updated:
         face_state['last_update'] = time.time()
         return jsonify({"status": "success", "state": face_state})
         
     return jsonify({"status": "error", "message": "Invalid parameters"}), 400
+
+@app.route('/stop_audio', methods=['POST'])
+def stop_audio():
+    """Interrompe la riproduzione audio uccidendo il processo ffplay."""
+    try:
+        # pkill restituisce 0 se ha trovato processi da uccidere, 1 altrimenti.
+        # Entrambi sono accettabili per noi.
+        subprocess.run(["pkill", "ffplay"], stderr=subprocess.DEVNULL)
+        return jsonify({"status": "success", "message": "Audio stop signal sent"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/blink', methods=['POST'])
 def blink():
