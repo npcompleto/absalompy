@@ -16,6 +16,10 @@ face_state = {
     "loading": False,
     "angry": False,
     "sad": False,
+    "last_interaction": {
+        "user": "",
+        "bot": ""
+    },
     "last_update": time.time()
 }
 
@@ -87,6 +91,10 @@ def control():
 
     if 'sad' in data:
         face_state['sad'] = bool(data['sad'])
+        updated = True
+
+    if 'last_interaction' in data:
+        face_state['last_interaction'] = data['last_interaction']
         updated = True
             
     if updated:

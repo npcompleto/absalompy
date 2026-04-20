@@ -147,9 +147,9 @@
             margin-top: calc(var(--eye-height) / 2 - 40px);
             margin-bottom: calc(var(--eye-height) / 2 - 40px);
             background: transparent;
-            border: 8px solid rgba(0, 242, 255, 0.1);
-            border-top: 8px solid var(--eye-color);
-            box-shadow: 0 0 30px var(--eye-shadow);
+            border: 8px solid rgba(0, 242, 255, 0.1) !important;
+            border-top: 8px solid var(--eye-color) !important;
+            box-shadow: 0 0 30px var(--eye-shadow) !important;
             animation: spin 1s linear infinite !important;
             border: none;
         }
@@ -160,6 +160,14 @@
 
         #eye-right.angry {
             transform: translateY(20px) rotate(-15deg);
+        }
+
+        .eye.sad {
+            transform: translateY(20px) rotate(-15deg);
+        }
+
+        #eye-right.sad {
+            transform: translateY(20px) rotate(15deg);
         }
 
         .eye.loading::after {
@@ -257,6 +265,127 @@
                 transform: translateY(10px);
             }
         }
+
+        .history-trigger {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--eye-color);
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            z-index: 100;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .history-trigger:hover {
+            background: rgba(0, 242, 255, 0.2);
+            transform: scale(1.1);
+            box-shadow: 0 0 20px var(--eye-shadow);
+        }
+
+        .history-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .history-overlay.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        .history-content {
+            background: rgba(15, 15, 20, 0.95);
+            border: 1px solid var(--eye-color);
+            padding: 40px;
+            border-radius: 24px;
+            max-width: 600px;
+            width: 85%;
+            position: relative;
+            box-shadow: 0 0 60px rgba(0, 242, 255, 0.15);
+            transform: translateY(20px);
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .history-overlay.active .history-content {
+            transform: translateY(0);
+        }
+
+        .history-content h3 {
+            color: var(--eye-color);
+            margin-top: 0;
+            font-weight: 300;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            border-bottom: 1px solid rgba(0, 242, 255, 0.1);
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+            font-size: 1.2rem;
+        }
+
+        .chat-interaction {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            overflow: scroll;
+            height: 50vh;
+        }
+
+        .message {
+            line-height: 1.6;
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.03);
+            padding: 15px 20px;
+            border-radius: 12px;
+            border-left: 3px solid var(--eye-color);
+        }
+
+        .message strong {
+            display: block;
+            color: var(--eye-color);
+            margin-bottom: 8px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            opacity: 0.7;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 28px;
+            cursor: pointer;
+            opacity: 0.4;
+            transition: opacity 0.2s;
+        }
+
+        .close-btn:hover {
+            opacity: 1;
+        }
     </style>
 </head>
 
@@ -269,6 +398,30 @@
             <path id="lip-lower" class="lip" />
         </svg>
         <div id="status" class="status-indicator">System Active</div>
+    </div>
+
+    <button id="history-btn" class="history-trigger" onclick="toggleHistory()" title="Ultima conversazione">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+            <path
+                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
+        </svg>
+    </button>
+
+    <div id="history-overlay" class="history-overlay">
+        <div class="history-content">
+            <button class="close-btn" onclick="toggleHistory()">×</button>
+            <h3>Ultima Conversazione</h3>
+            <div class="chat-interaction">
+                <div class="message user-msg">
+                    <strong>Tu</strong>
+                    <span id="last-user-text">Nessun messaggio recente.</span>
+                </div>
+                <div class="message bot-msg">
+                    <strong>Absalom</strong>
+                    <span id="last-bot-text">In attesa di istruzioni.</span>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -325,9 +478,20 @@
                 // Toggle Sad Face
                 if (data.sad) {
                     mouthSvg.classList.add('sad');
+                    eyeLeft.classList.add('sad');
+                    eyeRight.classList.add('sad');
                 } else {
                     mouthSvg.classList.remove('sad');
+                    eyeLeft.classList.remove('sad');
+                    eyeRight.classList.remove('sad');
                 }
+
+                // Update History Data
+                if (data.last_interaction) {
+                    document.getElementById('last-user-text').innerText = data.last_interaction.user || "Nessun messaggio recente.";
+                    document.getElementById('last-bot-text').innerText = data.last_interaction.bot || "In attesa di istruzioni.";
+                }
+
             } catch (err) {
                 console.error("Polling error:", err);
             }
@@ -351,6 +515,17 @@
             updateEyes('closed');
             setTimeout(() => updateEyes('open'), 150);
         }, 1000);
+
+        function toggleHistory() {
+            const overlay = document.getElementById('history-overlay');
+            if (overlay.style.display === 'flex') {
+                overlay.classList.remove('active');
+                setTimeout(() => { overlay.style.display = 'none'; }, 300);
+            } else {
+                overlay.style.display = 'flex';
+                setTimeout(() => { overlay.classList.add('active'); }, 10);
+            }
+        }
     </script>
 </body>
 

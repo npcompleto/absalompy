@@ -130,7 +130,24 @@ def set_sad(sad_status):
     except Exception as e:
         print(f"Errore set_sad: {e}")
 
+def set_last_interaction(user_text, bot_text):
+    try:
+        requests.post(f"{BASE_URL}/control", json={
+            "last_interaction": {
+                "user": user_text,
+                "bot": bot_text
+            }
+        })
+    except Exception as e:
+        print(f"Errore set_last_interaction: {e}")
 
+def reset_face():
+    set_sad(False)
+    set_angry(False)
+    set_loading(False)
+    set_busy(False)
+    set_speaking(False)
+    set_mode("awake")
 
 
 
@@ -323,6 +340,7 @@ def ask_llm(user_input):
         # Sintesi vocale, salvataggio memoria e log della risposta finale
         if final_answer:
             save_to_memory(user_input, final_answer)
+            set_last_interaction(user_input, final_answer)
         else:
             print("--- Nessuna risposta testuale ricevuta dall'LLM. ---")
             
@@ -388,21 +406,22 @@ def start_assistant(debug=False):
                         continue
                     
                     cmd = parts[1].lower()
-                    if cmd == "sad": set_sad(True)
+                    if cmd == "sad": 
+                        reset_face()
+                        set_sad(True)
                     elif cmd == "nosad": set_sad(False)
-                    elif cmd == "angry": set_angry(True)
+                    elif cmd == "angry": 
+                        reset_face()
+                        set_angry(True)
                     elif cmd == "noangry": set_angry(False)
-                    elif cmd == "loading": set_loading(True)
+                    elif cmd == "loading": 
+                        reset_face()
+                        set_loading(True)
                     elif cmd == "noloading": set_loading(False)
                     elif cmd == "awake": set_mode("awake")
                     elif cmd == "asleep": set_mode("asleep")
                     elif cmd == "reset":
-                        set_sad(False)
-                        set_angry(False)
-                        set_loading(False)
-                        set_busy(False)
-                        set_speaking(False)
-                        set_mode("awake")
+                        reset_face()
                     else:
                         print(f"Emozione '{cmd}' non riconosciuta.")
                     continue
