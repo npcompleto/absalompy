@@ -210,6 +210,7 @@
         <div class="nav-item active" onclick="showSection('face')">Face Control</div>
         <div class="nav-item" onclick="showSection('identity')">Identity</div>
         <div class="nav-item" onclick="showSection('memory')">Memory</div>
+        <div class="nav-item" onclick="showSection('system')">System</div>
         <a href="/" class="nav-item" target="_blank" style="margin-top: auto;">Open Face View →</a>
     </div>
 
@@ -272,6 +273,25 @@
                 <select id="memory-select" onchange="loadMemoryContent()"></select>
                 <textarea id="memory-editor"></textarea>
                 <button class="btn-save" onclick="saveMemory()">Save Memory</button>
+            </div>
+        </div>
+
+        <!-- System Section -->
+        <div id="section-system" class="section">
+            <h2>System configuration (.env)</h2>
+            <div class="card">
+                <span class="control-label">Blind Override Environment Variable</span>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin: 15px 0;">
+                    Inserisci il nome della variabile (es. <code>GOOGLE_API_KEY</code>) e il nuovo valore. 
+                    Per sicurezza, i valori esistenti non vengono mostrati. L'aggiornamento richiede il riavvio manuale dell'assistente per avere effetto.
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 15px;">
+                    <input type="text" id="env-key" placeholder="NOME_VARIABILE" 
+                           style="background: #000; border: 1px solid var(--border); color: var(--primary); padding: 12px; border-radius: 8px; font-family: monospace;">
+                    <input type="password" id="env-value" placeholder="Nuovo Valore" 
+                           style="background: #000; border: 1px solid var(--border); color: var(--primary); padding: 12px; border-radius: 8px;">
+                    <button class="btn-save" onclick="saveEnv()">Aggiorna Variabile</button>
+                </div>
             </div>
         </div>
     </div>
@@ -399,6 +419,28 @@
                 body: JSON.stringify({content})
             });
             showToast("Memory for " + date + " saved");
+        }
+
+        async function saveEnv() {
+            const key = document.getElementById('env-key').value;
+            const value = document.getElementById('env-value').value;
+            if (!key || !value) {
+                alert("Inserisci sia il nome che il valore.");
+                return;
+            }
+            const r = await fetch('/api/env', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({key, value})
+            });
+            const res = await r.json();
+            if (res.status === "success") {
+                showToast("Variabile aggiornata correttamente");
+                document.getElementById('env-key').value = '';
+                document.getElementById('env-value').value = '';
+            } else {
+                alert("Errore: " + res.message);
+            }
         }
 
         function showToast(msg) {

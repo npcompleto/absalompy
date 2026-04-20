@@ -6,6 +6,7 @@ import os
 import subprocess
 import glob
 import platform
+from dotenv import set_key, find_dotenv
 
 app = Flask(__name__)
 
@@ -153,6 +154,29 @@ def handle_memory(date):
         with open(mem_path, "r", encoding="utf-8") as f:
             return jsonify({"content": f.read()})
     return jsonify({"error": "File not found"}), 404
+
+@app.route('/api/env', methods=['POST'])
+def update_env():
+    """Sovrascrive una variabile d'ambiente nel file .env senza mostrarne il contenuto esistente."""
+    data = request.get_json()
+    key = data.get('key')
+    value = data.get('value')
+    
+    if not key or value is None:
+        return jsonify({"status": "error", "message": "Chiave e valore richiesti"}), 400
+    
+    try:
+        env_file = find_dotenv()
+        if not env_file:
+            env_file = os.path.join(os.getcwd(), ".env")
+            # Crea il file se non esiste
+            if not os.path.exists(env_file):
+                with open(env_file, "w") as f: f.write("")
+        
+        set_key(env_file, key.upper(), value)
+        return jsonify({"status": "success", "message": f"Variabile {key} aggiornata"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/stop_audio', methods=['POST'])
 def stop_audio():
