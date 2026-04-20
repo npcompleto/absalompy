@@ -213,7 +213,11 @@ def speak(text):
                     wav_file.writeframes(chunk.audio_int16_bytes)
             
             # Riproduce il pezzo e controlla se è stato interrotto (pkill)
+            is_speaking = True
+            set_speaking(True)
             return_code = play_audio(filename)
+            is_speaking = False
+            set_speaking(False)
             
             # Se il processo è stato ucciso (non-zero return code), interrompiamo la lettura dei pezzi successivi
             if return_code != 0:
