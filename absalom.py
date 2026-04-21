@@ -23,6 +23,8 @@ from tools.time_tool import get_next_week_start_date
 from db import init_db
 from dotenv import load_dotenv
 from datetime import datetime
+import threading
+from telegram_manager import TelegramManager
 
 # Carica variabili d'ambiente da .env
 # LLM Configuration
@@ -72,13 +74,14 @@ TOOL_PHRASES = [
 
 SAMPLE_RATE = 16000
 
-# Audio queue and status
 q = queue.Queue()
 is_busy = False
 is_awake = False
 is_speaking = False
-INACTIVITY_TIMEOUT = 120  # 10 secondi di inattività per lo standby
+INACTIVITY_TIMEOUT = 120  # 120 secondi di inattività per lo standby
 last_interaction_time = 0
+busy_lock = threading.Lock()
+telegram_bot = None
 
 _piper_voice = None
 last_interaction_time = 0
@@ -140,14 +143,26 @@ def set_last_interaction(user_text, bot_text):
         })
     except Exception as e:
         print(f"Errore set_last_interaction: {e}")
-
 def reset_face():
     set_sad(False)
     set_angry(False)
     set_loading(False)
-    set_busy(False)
+    set_busy_safe(False)
     set_speaking(False)
     set_mode("awake")
+
+def get_status():
+    global is_awake, is_busy
+    return {
+        "is_awake": is_awake,
+        "is_busy": is_busy
+    }
+
+def set_busy_safe(status):
+    global is_busy
+    with busy_lock:
+        is_busy = status
+        set_busy(status)
 
 
 
@@ -409,7 +424,26 @@ def start_assistant(debug=False):
     bootstrap_model()
     
     
+    
     set_loading(False)
+    
+    # Inizializza Telegram Bot
+    global telegram_bot
+    def ask_llm_with_busy(text):
+        set_busy_safe(True)
+        try:
+            return ask_llm(text)
+        finally:
+            set_busy_safe(False)
+            
+    telegram_bot = TelegramManager(
+        ask_callback=ask_llm_with_busy,
+        speak_callback=speak,
+        set_mode_callback=set_mode,
+        get_status_callback=get_status
+    )
+    telegram_bot.start()
+
     if debug:
         print("\n>>> Absalom OS avviato in modalità DEBUG (input da tastiera).")
         print("Scrivi qualcosa per parlare con Absalom (o 'esci' per terminare):")
@@ -519,8 +553,7 @@ def start_assistant(debug=False):
                             set_mode("awake")
                             print("Svegliato dalla wakeword.")
                         
-                        is_busy = True
-                        set_busy(True)
+                        set_busy_safe(True)
                         
                         if command:
                             if command == "addormentati":
@@ -541,8 +574,7 @@ def start_assistant(debug=False):
                         while not q.empty():
                             try: q.get_nowait()
                             except queue.Empty: break
-                        is_busy = False
-                        set_busy(False)
+                        set_busy_safe(False)
                         
                     else:
                         # Se siamo addormentati e non sentiamo la wakeword, ignoriamo il testo

@@ -1,0 +1,39 @@
+Utente: ciao
+Absalom: Ciao! Sono RON, il tuo B-Bot della Bubble. Come posso aiutarti oggi?
+
+Utente: che compiti ho per domani?
+Absalom: Domani hai due compiti. Per Arte e Immagine devi studiare l'arte Etrusca dalle slide su classroom. Per Storia invece hai parecchio da fare: devi studiare le pagine 194-195, imparare le definizioni di Simonia, Concubinato, Scisma, Ortodossia, Cattolico, Dictatus Papae e Scomunica dal glossario, disegnare una cattedrale gotica con tutte le sue parti indicate con frecce, e studiare i documenti 2-3 a pagina 205.
+
+Utente: che cos'è la simonia?
+Absalom: La Simonia è il peccato di comprare o vendere cose sacre, come le cariche religiose o i sacramenti. Immagina di andare in chiesa e qualcuno ti dice "vuoi diventare prete? Ti costa 100 euro". Ecco, quella sarebbe Simonia. Nel Medioevo era un problema grosso perché i nobili e i re compravano le posizioni di potere nella Chiesa, e la Chiesa voleva fermare questa cosa. Per questo motivo il papa Gregorio VII si arrabbiò molto e punì chi lo faceva.
+
+Utente: e il concubinato?
+Absalom: Il Concubinato è quando un prete vive con una donna come se fossero sposati, senza essere effettivamente sposati. Nel Medioevo i preti dovevano essere celibi, cioè non sposati, perché si pensava che dovessero dedicarsi completamente a Dio. Ma molti preti invece avevano delle compagne e facevano figli insieme, e questo era considerato un grave peccato. La Chiesa voleva che i preti seguissero davvero le regole e smettessero di avere queste relazioni.
+
+Utente: e le altre definizioni che devo studiare per storia?
+Absalom: Ti ho già spiegato Simonia e Concubinato. Delle altre definizioni per Storia, dovrai studiare Scisma, Ortodossia, Cattolico, Dictatus Papae e Scomunica dal glossario. Non le ho ancora spiegate, quindi faresti bene a leggerle dal glossario del tuo libro o da classroom per comprenderle meglio. Se poi vuoi che ti spieghi una di queste, basta che me lo dici e te la chiarisco!
+
+Utente: spiegamele
+Absalom: Perfetto, te le spiego tutte!
+
+Lo Scisma è una spaccatura, una divisione. Nel contesto che stai studiando, lo Scisma d'Oriente del 1054 è quando la Chiesa cristiana si è divisa in due: la Chiesa Cattolica a Occidente e la Chiesa Ortodossa a Oriente. Erano come due rami dello stesso albero che non volevano più stare insieme per motivi di dottrina e di potere.
+
+L'Ortodossia significa "opinione giusta" o "dottrina giusta". Se una cosa è ortodossa, vuol dire che segue le regole ufficiali della Chiesa. Se invece è eterodossa, significa che non segue le regole ed è considerata sbagliata.
+
+Cattolico significa "universale" e si riferisce alla Chiesa Cattolica, quella di Roma. È la versione occidentale della Chiesa cristiana dopo lo Scisma d'Oriente di cui ti ho parlato prima.
+
+Il Dictatus Papae è un documento scritto dal papa Gregorio VII nel 1075 dove il papa elenca i suoi poteri. Praticamente diceva "io, il papa, sono il più potente e nessuno, nemmeno i re, può mettersi contro di me". Era una dichiarazione di forza della Chiesa contro il potere dei nobili e dei re.
+
+La Scomunica è una punizione della Chiesa. Se venivi scomunicato, venivi cacciato dalla comunità cristiana. Non potevi ricevere i sacramenti, non potevi stare in chiesa, eri praticamente isolato. Era la punizione più grave che la Chiesa potesse dare.
+
+Utente: gli scomunicati più illustri?
+Absalom: Ah, bella domanda! Gli scomunicati più famosi della storia medievale sono parecchi.
+
+Il più celebre è probabilmente l'imperatore Enrico IV. Nel 1076 il papa Gregorio VII lo scomunicò perché Enrico voleva continuare a nominare i vescovi della Chiesa, mentre il papa diceva che solo lui poteva farlo. Enrico IV dovette poi andare a Canossa nel 1077, al castello del papa, e stare tre giorni nella neve a chiedere perdono per farsi togliere la scomunica. È una storia pazzesca.
+
+Un altro illustre è Federico Barbarossa, l'imperatore del Sacro Romano Impero, che ebbe un sacco di conflitti con i papi nel 1100-1200.
+
+Ci sono stati anche re e nobili scomunicati per vari motivi, soprattutto quando sfidavano il potere della Chiesa o commettevano peccati gravi secondo le regole ecclesiastiche.
+
+Quello che è importante capire è che la scomunica era un'arma di potere enorme nel Medioevo. Se eri scomunicato, la gente aveva paura di stare con te perché pensava che potesse toccarti la maledizione di Dio. Quindi anche i più potenti imperatori tremavano quando il papa li scomunicava.
+
