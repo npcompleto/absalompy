@@ -20,6 +20,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 from tools.school_tool import add_school_event, list_school_events
 from tools.time_tool import get_next_week_start_date
+from tools.wiki_tool import wiki_list_entries, wiki_read, wiki_write, wiki_search, wiki_ingest_raw
 from db import init_db
 from dotenv import load_dotenv
 from datetime import datetime
@@ -32,11 +33,11 @@ from telegram_manager import TelegramManager
 load_dotenv()
 
 # LLM Configuration
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama-local")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:1.5b")
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-haiku-20240307")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-GOOGLE_MODEL = os.getenv("GOOGLE_MODEL", "gemini-2.0-flash")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama-local").strip()
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:1.5b").strip()
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-haiku-20240307").strip()
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "").strip()
+GOOGLE_MODEL = os.getenv("GOOGLE_MODEL", "gemini-2.0-flash").strip()
 
 PIPER_MODEL_DIR = "models/piper"
 PIPER_MODEL_NAME = "it_IT-paola-medium.onnx"
@@ -87,7 +88,7 @@ _piper_voice = None
 last_interaction_time = 0
 
 # Lista dei tool disponibili per LangChain
-tools = [list_school_events, get_next_week_start_date]
+tools = [list_school_events, get_next_week_start_date, wiki_list_entries, wiki_read, wiki_write, wiki_search, wiki_ingest_raw]
 # Mappatura per l'esecuzione automatica dei tool basata sul nome
 tool_map = {tool.name: tool for tool in tools}
 
@@ -249,7 +250,8 @@ def get_persona():
     """Carica e concatena i file della personalità."""
     persona = ""
     try:
-        for filename in ["Identity.md"]:
+        # Carichiamo sia l'identità principale che quella del Bibliotecario/Wiki
+        for filename in ["Identity.md", "Librarian.md"]:
             path = os.path.join("persona", filename)
             if os.path.exists(path):
                 with open(path, "r") as f:
@@ -346,7 +348,7 @@ def ask_llm(user_input):
                 
             # Se l'LLM ha richiesto l'uso di tool, eseguiamo i task
             loop_count = 0
-            MAX_LOOP = 3
+            MAX_LOOP = 20
             for tool_call in ai_msg.tool_calls:
                 loop_count += 1
                 if loop_count > MAX_LOOP:
@@ -365,7 +367,52 @@ def ask_llm(user_input):
                     try:
                         tool_output = selected_tool.invoke(tool_call["args"])
                         print(f"--- Risultato del tool: {tool_output} ---")
-                        messages.append(ToolMessage(content=str(tool_output), tool_call_id=tool_call["id"]))
+                        
+                        # Gestione Multimodale: se il tool restituisce dati multimediali (es. wiki_ingest_raw)
+                        if isinstance(tool_output, str) and tool_output.startswith("__INGEST_DATA__:"):
+                            try:
+                                data_json = tool_output.split("__INGEST_DATA__:", 1)[1]
+                                data = json.loads(data_json)
+                                
+                                if data.get("type") == "media_list":
+                                    content_blocks = [{"type": "text", "text": data.get("text_info", "Dati estratti dai file:")}]
+                                    
+                                    # Aggiunta blocchi di testo
+                                    for t in data.get("text_blocks", []):
+                                        content_blocks.append({"type": "text", "text": f"\n\nCONTENUTO FILE {t['filename']}:\n{t['content']}"})
+                                    
+                                    # Aggiunta immagini
+                                    prov = LLM_PROVIDER.lower().strip()
+                                    for m in data["media"]:
+                                        if prov == "google":
+                                            content_blocks.append({
+                                                "type": "media",
+                                                "mime_type": "image/jpeg",
+                                                "data": m["data"]
+                                            })
+                                        elif prov == "anthropic":
+                                            content_blocks.append({
+                                                "type": "image",
+                                                "source": {
+                                                    "type": "base64",
+                                                    "media_type": "image/jpeg",
+                                                    "data": m["data"]
+                                                }
+                                            })
+                                        else:
+                                            # Fallback per altri provider multimodali (es standard LangChain)
+                                            content_blocks.append({
+                                                "type": "image_url",
+                                                "image_url": {"url": f"data:image/jpeg;base64,{m['data']}"}
+                                            })
+                                    messages.append(ToolMessage(content=content_blocks, tool_call_id=tool_call["id"]))
+                                else:
+                                    messages.append(ToolMessage(content=str(tool_output), tool_call_id=tool_call["id"]))
+                            except Exception as je:
+                                print(f"Errore parsing dati ingest: {je}")
+                                messages.append(ToolMessage(content=str(tool_output), tool_call_id=tool_call["id"]))
+                        else:
+                            messages.append(ToolMessage(content=str(tool_output), tool_call_id=tool_call["id"]))
                     except Exception as te:
                         error_text = f"Errore nell'esecuzione del tool {tool_name}: {te}"
                         print(error_text)
@@ -586,7 +633,76 @@ def start_assistant(debug=False):
     except Exception as e:
         print(f"\nErrore durante l'esecuzione: {e}")
 
+def remote_commands_worker():
+    """Thread di background che interroga il server per comandi remoti (es. da Web UI)."""
+    global is_busy
+    print("--- Remote Commands Worker avviato ---")
+    while True:
+        try:
+            time.sleep(3) # Polling ogni 3 secondi
+            
+            # Se siamo già occupati, saltiamo il polling per questo ciclo
+            if is_busy:
+                continue
+                
+            response = requests.get(f"{BASE_URL}/status")
+            if response.status_code == 200:
+                state = response.json()
+                
+                # Controllo Trigger Wiki Ingest
+                if state.get("ingest_requested"):
+                    print("[!] Ricevuto segnale di ingestione Wiki da Web UI.")
+                    
+                    with busy_lock:
+                        is_busy = True
+                    
+                    try:
+                        # Reset del trigger sul server prima di iniziare
+                        requests.post(f"{BASE_URL}/control", json={"ingest_requested": False})
+                        
+                        # Feedback vocale come richiesto
+                        speak("Ho ricevuto i documenti. Passo subito i documenti al Bibliotecario per l'archiviazione.")
+                        
+                        # Trigger dell'ingestione tramite LLM
+                        ingest_response = ask_llm("Bibliotecario, ingerisci i file presenti nella cartella raw nella Wiki e sintetizzali.")
+                        speak(ingest_response)
+                    finally:
+                        with busy_lock:
+                            is_busy = False
+                
+                # Controllo Messaggi Chat da Web
+                if state.get("pending_chat_msg"):
+                    chat_msg = state.get("pending_chat_msg")
+                    print(f"[!] Ricevuto messaggio chat da Web: '{chat_msg}'")
+                    
+                    with busy_lock:
+                        is_busy = True
+                    
+                    try:
+                        # Reset del messaggio pendente sul server
+                        requests.post(f"{BASE_URL}/control", json={"pending_chat_msg": None})
+                        
+                        # Elaborazione tramite LLM
+                        response = ask_llm(chat_msg)
+                        
+                        # Salvataggio risposta per la Web UI e speak
+                        requests.post(f"{BASE_URL}/control", json={"chat_response": response})
+                        speak(response)
+                    finally:
+                        with busy_lock:
+                            is_busy = False
+        except Exception as e:
+            # Silenzioso per non sporcare i log se il server è momentaneamente giù
+            pass
+
 if __name__ == "__main__":
+    # Creazione delle cartelle se mancano
+    os.makedirs("persona/memory", exist_ok=True)
+    os.makedirs("persona/wiki/raw", exist_ok=True)
+    
+    # Avvio thread comandi remoti
+    threading.Thread(target=remote_commands_worker, daemon=True).start()
+    
     parser = argparse.ArgumentParser(description="Absalom OS Assistant")
     parser.add_argument("--debug", action="store_true", help="Avvia in modalità debug (input da tastiera)")
     args = parser.parse_args()

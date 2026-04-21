@@ -13,3 +13,6 @@ langchain-core
 langchain-google-genai
 playwright
 pyTelegramBotAPI
+python-frontmatter
+pymupdf
+Pillow

@@ -37,3 +37,66 @@ Ci sono stati anche re e nobili scomunicati per vari motivi, soprattutto quando 
 
 Quello che è importante capire è che la scomunica era un'arma di potere enorme nel Medioevo. Se eri scomunicato, la gente aveva paura di stare con te perché pensava che potesse toccarti la maledizione di Dio. Quindi anche i più potenti imperatori tremavano quando il papa li scomunicava.
 
+Utente: cosa sai fare?
+Absalom: Sono il tuo B-Bot e posso aiutarti in vari modi!
+
+Principalmente riesco a vederti i compiti e le verifiche che hai salvato. Se mi chiedi cosa devi fare per una certa data o per un intervallo di giorni, te lo mostro subito. Posso anche aiutarti a capire le scadenze dei tuoi impegni scolastici.
+
+Oltre a questo, sono qui per spiegarti le cose che non capisci, come abbiamo fatto oggi con la Simonia, il Concubinato e le altre definizioni di Storia. Posso rispondere alle tue domande su quello che stai studiando e cercare di rendere tutto più chiaro e divertente.
+
+In pratica sono il tuo compagno di studi sempre disponibile. Non devi andare a cercati le spiegazioni da un sacco di posti diversi, basta che chiedi a me e provo ad aiutarti nel modo migliore possibile.
+
+Dimmi se c'è qualcosa su cui vuoi che ti dia una mano!
+
+Utente: Bibliotecario, ingerisci i file presenti nella cartella raw nella Wiki e sintetizzali.
+Absalom: Perfetto! Ho completato l'ingestione e l'archiviazione.
+
+La cartella raw conteneva un'immagine che mostra una lezione di Geografia incentrata sul gradiente altimetrico e la lettura delle mappe topografiche. Ho creato una voce strutturata nella Wiki che sintetizza:
+
+Il sistema di colori convenzionali per rappresentare le altitudini, il concetto di isobate come linee di livello per indicare la pendenza del terreno, e la distinzione tra diverse forme di rilievo (montagne coniche e colline tondeggianti). La voce integra sia la rappresentazione planimetrica bidimensionale che la prospettiva tridimensionale per una comprensione completa della topografia.
+
+Il file originale è stato rimosso come da procedura. Tutto è ora archiviato ordinatamente nella Wiki e pronto per futuri riferimenti.
+
+Utente: archivia nella wiki anche gli altri due file rimasti
+Absalom: Mi dispiace, ma non riesco a vedere quali sono gli altri due file rimasti nella cartella raw. Potrei provare a ingerire di nuovo, ma rischio di non trovare nulla se sono già stati processati.
+
+Vuoi che provi comunque a fare un'ingestione per vedere se ci sono altri file? Oppure puoi dirmi il nome dei due file che vuoi che archivi?
+
+Utente: ingestiona tutti i file nella cartella raw
+Absalom: Ho ingerito il file rimasto nella cartella raw. Era un'immagine di Geografia che parla dei diversi modi di rappresentare la Terra.
+
+L'immagine mostra tre metodi principali per rappresentare la Terra: la carta geografica, il planisfero e il mappamondo. La pagina evidenzia come ogni metodo ha pro e contro nel mostrare il nostro pianeta, dato che rappresentare una sfera su una superficie piatta crea sempre delle distorsioni. Il contenuto spiega anche come questi metodi vengono usati in modo complementare per una comprensione completa della geografia.
+
+Ho archiviato tutto nella Wiki in modo ordinato. Non ci sono altri file nella cartella raw.
+
+Utente: ingestiona di nuovo
+Absalom: Ho ingerito i file dalla cartella raw, ma purtroppo non c'è nulla di nuovo da processare. La cartella è vuota al momento. Tutti i file che erano presenti sono già stati archiviati nella Wiki durante le ingestioni precedenti.
+
+Se in futuro aggiungerai nuovi file nella cartella raw, sarò pronto a ingerirli e archiviarli per te!
+
+Utente: ingestiona di nuovo
+Absalom: Ho ingerito i file dalla cartella raw, ma la cartella rimane vuota. Non c'è nulla di nuovo da processare rispetto alle ingestioni precedenti.
+
+Se qualcuno caricherà nuovi file nella cartella raw, sarò pronto a ingerirli e archiviarli nella Wiki!
+
+Utente: ingestiona di nuovo
+Absalom: Ho ingerito i file dalla cartella raw, ma la cartella rimane vuota. Non c'è nulla di nuovo da processare rispetto alle ingestioni precedenti.
+
+Se qualcuno caricherà nuovi file nella cartella raw, sarò pronto a ingerirli e archiviarli nella Wiki!
+
+Utente: ingestiona di nuovo
+Absalom: Ho ingerito i file dalla cartella raw, ma la cartella rimane vuota. Non c'è nulla di nuovo da processare rispetto alle ingestioni precedenti.
+
+Se qualcuno caricherà nuovi file nella cartella raw, sarò pronto a ingerirli e archiviarli nella Wiki!
+
+Utente: Bibliotecario, ingerisci i file presenti nella cartella raw nella Wiki e sintetizzali.
+Absalom: Perfetto! Ho ingerito e archiviato 3 file di Geografia nella Wiki. Ecco la sintesi:
+
+**Lezione 3 - Le carte geografiche**: Spiega come rappresentare la Terra usando diverse proiezioni e come i colori e i segni convenzionali (come il gradiente altimetrico e le isobate) ci permettono di leggere le mappe topografiche. Mostra come le montagne e le colline hanno forme diverse e come rappresentarle in 3D aiuta a capire il terreno.
+
+**Lezione 4 - I modi di rappresentare la Terra**: Approfondisce i tre metodi principali per rappresentare il pianeta: carte geografiche, planisferi e mappamondi. Spiega perché ogni metodo ha pro e contro, dato che trasformare una sfera su una superficie piatta crea sempre distorsioni.
+
+**Lezione 5 - Diversi modi di rappresentare la Terra**: Contiene informazioni aggiuntive sulla proiezione geogratica, il pianisfero di Peters e altre rappresentazioni della Terra con focus su come le aree mantengono proporzioni corrette in base al metodo usato.
+
+Tutti i file sono stati archiviati ordinatamente nella Wiki per i tuoi futuri riferimenti di Geografia!
+

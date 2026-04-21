@@ -19,6 +19,9 @@ face_state = {
     "loading": False,
     "angry": False,
     "sad": False,
+    "ingest_requested": False,
+    "pending_chat_msg": None,
+    "chat_response": None,
     "last_interaction": {
         "user": "",
         "bot": ""
@@ -104,6 +107,18 @@ def control():
         face_state['last_interaction'] = data['last_interaction']
         updated = True
             
+    if 'ingest_requested' in data:
+        face_state['ingest_requested'] = bool(data['ingest_requested'])
+        updated = True
+            
+    if 'pending_chat_msg' in data:
+        face_state['pending_chat_msg'] = data['pending_chat_msg']
+        updated = True
+
+    if 'chat_response' in data:
+        face_state['chat_response'] = data['chat_response']
+        updated = True
+
     if updated:
         face_state['last_update'] = time.time()
         return jsonify({"status": "success", "state": face_state})
@@ -207,6 +222,50 @@ def blink():
     
     threading.Thread(target=execute_blink).start()
     return jsonify({"status": "blinking"})
+
+@app.route('/user-ui')
+def user_ui():
+    return render_template('user-ui.html')
+
+@app.route('/api/wiki/upload', methods=['POST'])
+def wiki_upload():
+    """Gestisce il caricamento multi-file nella cartella wiki/raw."""
+    raw_dir = os.path.join("persona", "wiki", "raw")
+    os.makedirs(raw_dir, exist_ok=True)
+    
+    if 'files' not in request.files:
+        return jsonify({"status": "error", "message": "Nessun file caricato"}), 400
+    
+    files = request.files.getlist('files')
+    uploaded_files = []
+    
+    for file in files:
+        if file.filename:
+            filepath = os.path.join(raw_dir, file.filename)
+            file.save(filepath)
+            uploaded_files.append(file.filename)
+    
+    if uploaded_files:
+        face_state['ingest_requested'] = True
+        return jsonify({
+            "status": "success", 
+            "message": f"Caricati {len(uploaded_files)} file",
+            "files": uploaded_files
+        })
+    
+    return jsonify({"status": "error", "message": "Nessun file valido"}), 400
+
+@app.route('/api/chat', methods=['POST'])
+def chat_request():
+    """Riceve un messaggio dalla web UI per Absalom."""
+    data = request.get_json()
+    message = data.get('message')
+    if not message:
+        return jsonify({"status": "error", "message": "Nessun messaggio"}), 400
+    
+    face_state['pending_chat_msg'] = message
+    face_state['chat_response'] = None # Reset risposta precedente
+    return jsonify({"status": "received"})
 
 if __name__ == '__main__':
     print("Robot Face API starting at http://127.0.0.1:5000")
