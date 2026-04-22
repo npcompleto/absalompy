@@ -373,19 +373,7 @@ def callback(indata, frames, time, status):
     if status:
         print(status, file=sys.stderr)
     if not face.get_robot_status().get("is_busy"):
-        # Se la frequenza hardware è diversa da quella di Vosk (16000), ricampioniamo
-        if SAMPLE_RATE != VOSK_RATE:
-            audio_data = np.frombuffer(indata, dtype=np.int16)
-            num_samples = len(audio_data)
-            new_num_samples = int(num_samples * VOSK_RATE / SAMPLE_RATE)
-            resampled_audio = np.interp(
-                np.linspace(0, num_samples, new_num_samples, endpoint=False),
-                np.arange(num_samples),
-                audio_data
-            ).astype(np.int16)
-            q.put(resampled_audio.tobytes())
-        else:
-            q.put(bytes(indata))
+        q.put(bytes(indata))
 
 def start_assistant(debug=False):
     # Esegui il suono di avvio
@@ -428,7 +416,7 @@ def start_assistant(debug=False):
     last_interaction_time = 0
     
     try:
-        with sd.RawInputStream(samplerate=SAMPLE_RATE, blocksize=8000, dtype='int16',
+        with sd.RawInputStream(samplerate=SAMPLE_RATE, blocksize=16000, dtype='int16',
                                channels=1, callback=callback, device=AUDIO_DEVICE_INDEX):
             while True:
                 # Timer di inattività: se sveglio e timeout superato, vai in standby
@@ -441,6 +429,19 @@ def start_assistant(debug=False):
                 
                 try:
                     data = q.get(timeout=5) # Timeout per permettere il controllo dell'inattività
+                    
+                    # Se la frequenza hardware è diversa da quella di Vosk (16000), ricampioniamo nel thread principale
+                    if SAMPLE_RATE != VOSK_RATE:
+                        audio_data = np.frombuffer(data, dtype=np.int16)
+                        num_samples = len(audio_data)
+                        new_num_samples = int(num_samples * VOSK_RATE / SAMPLE_RATE)
+                        resampled_audio = np.interp(
+                            np.linspace(0, num_samples, new_num_samples, endpoint=False),
+                            np.arange(num_samples),
+                            audio_data
+                        ).astype(np.int16)
+                        data = resampled_audio.tobytes()
+                        
                 except queue.Empty:
                     continue
 
