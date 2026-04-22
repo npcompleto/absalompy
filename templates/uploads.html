@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absalom - Caricamento Documenti</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #00d2ff;
+            --secondary: #3a7bd5;
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg);
+            background-image: radial-gradient(circle at top right, rgba(0, 210, 255, 0.1), transparent),
+                              radial-gradient(circle at bottom left, rgba(58, 123, 213, 0.1), transparent);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .upload-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 32px;
+            padding: 3rem;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            text-align: center;
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 600;
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            margin-bottom: 2.5rem;
+            font-weight: 300;
+        }
+
+        .input-group {
+            text-align: left;
+            margin-bottom: 2rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.8rem;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-left: 0.5rem;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            padding: 1rem 1.5rem;
+            color: white;
+            font-family: inherit;
+            font-size: 1rem;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--primary);
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 0 4px rgba(0, 210, 255, 0.1);
+        }
+
+        .drop-zone {
+            border: 2px dashed rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 3rem 2rem;
+            margin-bottom: 2.5rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .drop-zone:hover, .drop-zone.drag-over {
+            border-color: var(--primary);
+            background: rgba(0, 210, 255, 0.05);
+        }
+
+        .drop-zone svg {
+            width: 48px;
+            height: 48px;
+            color: var(--primary);
+            margin-bottom: 1rem;
+        }
+
+        .drop-zone input {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .file-list {
+            text-align: left;
+            margin-bottom: 2rem;
+            max-height: 150px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+        }
+
+        .file-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.8rem 1rem;
+            border-radius: 12px;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .upload-btn {
+            width: 100%;
+            padding: 1.2rem;
+            border-radius: 18px;
+            background: linear-gradient(135deg, var(--secondary), var(--primary));
+            border: none;
+            color: white;
+            font-family: inherit;
+            font-weight: 600;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 10px 20px rgba(0, 210, 255, 0.3);
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px rgba(0, 210, 255, 0.4);
+        }
+
+        .upload-btn:active {
+            transform: translateY(0);
+        }
+
+        .upload-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        #status {
+            margin-top: 1.5rem;
+            font-size: 0.9rem;
+            min-height: 1.2rem;
+        }
+
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 2rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover { color: var(--text); }
+    </style>
+</head>
+<body>
+
+    <div class="upload-card">
+        <h1>Wiki Ingestion</h1>
+        <p class="subtitle">Alimenta la conoscenza di Absalom</p>
+
+        <div class="input-group">
+            <label for="category">Categoria Conoscenza</label>
+            <input type="text" id="category" placeholder="Es: Tecnologia, Storia, Manuali..." autocomplete="off">
+        </div>
+
+        <div class="drop-zone" id="drop-zone">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+            </svg>
+            <p>Seleziona i file o trascinali qui</p>
+            <input type="file" id="file-input" multiple>
+        </div>
+
+        <div id="file-list" class="file-list"></div>
+
+        <button class="upload-btn" id="upload-btn">Avvia Ingestione</button>
+        
+        <div id="status"></div>
+
+        <a href="/user-ui" class="back-link">Torna alla Chat</a>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const fileList = document.getElementById('file-list');
+        const uploadBtn = document.getElementById('upload-btn');
+        const status = document.getElementById('status');
+        const categoryInput = document.getElementById('category');
+
+        let selectedFiles = [];
+
+        fileInput.addEventListener('change', handleFiles);
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            handleFiles({ target: { files: e.dataTransfer.files } });
+        });
+
+        function handleFiles(e) {
+            const files = Array.from(e.target.files);
+            selectedFiles = [...selectedFiles, ...files];
+            renderFileList();
+        }
+
+        function renderFileList() {
+            fileList.innerHTML = '';
+            selectedFiles.forEach((file, index) => {
+                const item = document.createElement('div');
+                item.className = 'file-item';
+                item.innerHTML = `
+                    <span>${file.name}</span>
+                    <span style="color: #ef4444; cursor: pointer;" onclick="removeFile(${index})">Elimina</span>
+                `;
+                fileList.appendChild(item);
+            });
+        }
+
+        window.removeFile = (index) => {
+            selectedFiles.splice(index, 1);
+            renderFileList();
+        };
+
+        uploadBtn.addEventListener('click', async () => {
+            if (selectedFiles.length === 0) {
+                status.innerHTML = '<span class="error">Nessun file selezionato</span>';
+                return;
+            }
+
+            uploadBtn.disabled = true;
+            status.innerHTML = 'Caricamento in corso...';
+
+            const formData = new FormData();
+            selectedFiles.forEach(file => formData.append('files', file));
+            formData.append('category', categoryInput.value.trim());
+
+            try {
+                const response = await fetch('/api/wiki/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    status.innerHTML = `<span class="success">✅ ${result.message}</span>`;
+                    selectedFiles = [];
+                    categoryInput.value = '';
+                    renderFileList();
+                } else {
+                    status.innerHTML = `<span class="error">❌ ${result.message}</span>`;
+                }
+            } catch (error) {
+                status.innerHTML = '<span class="error">❌ Errore di rete</span>';
+            } finally {
+                uploadBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

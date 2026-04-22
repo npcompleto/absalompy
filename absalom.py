@@ -379,7 +379,7 @@ def start_assistant(debug=False):
     # Esegui il suono di avvio
     print("--- Riproduzione suono di avvio ---")
     face.set_loading(True)
-    play_audio("sounds/startup.mp3")
+    #play_audio("sounds/startup.mp3")
     init_db()
     bootstrap_model()
     
@@ -534,8 +534,13 @@ def remote_commands_worker():
                         # Feedback vocale come richiesto
                         speak("Ho ricevuto i documenti. Passo subito i documenti al Bibliotecario per l'archiviazione.")
                         
-                        # Trigger dell'ingestione tramite LLM
-                        ingest_response = ask_llm("Bibliotecario, ingerisci i file presenti nella cartella raw nella Wiki e sintetizzali.")
+                        # Trigger dell'ingestione tramite LLM con categoria se presente
+                        category = state.get("ingest_category")
+                        prompt = "Bibliotecario, ingerisci i file presenti nella cartella raw nella Wiki e sintetizzali."
+                        if category:
+                            prompt += f" La categoria specifica in cui salvare queste informazioni è: {category}."
+                            
+                        ingest_response = ask_llm(prompt)
                         speak(ingest_response)
                     finally:
                         face.set_busy(False)

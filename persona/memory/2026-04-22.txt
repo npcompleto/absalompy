@@ -1,0 +1,3 @@
+Utente: ciao
+Absalom: Ciao! Sono RON, il tuo B-Bot. Come posso aiutarti oggi?
+

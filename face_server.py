@@ -26,6 +26,7 @@ face_state = {
         "user": "",
         "bot": ""
     },
+    "ingest_category": None,
     "last_update": time.time()
 }
 
@@ -109,6 +110,8 @@ def control():
             
     if 'ingest_requested' in data:
         face_state['ingest_requested'] = bool(data['ingest_requested'])
+        if not face_state['ingest_requested']:
+            face_state['ingest_category'] = None
         updated = True
             
     if 'pending_chat_msg' in data:
@@ -227,6 +230,10 @@ def blink():
 def user_ui():
     return render_template('user-ui.html')
 
+@app.route('/uploads')
+def uploads_page():
+    return render_template('uploads.html')
+
 @app.route('/api/wiki/upload', methods=['POST'])
 def wiki_upload():
     """Gestisce il caricamento multi-file nella cartella wiki/raw."""
@@ -237,6 +244,8 @@ def wiki_upload():
         return jsonify({"status": "error", "message": "Nessun file caricato"}), 400
     
     files = request.files.getlist('files')
+    category = request.form.get('category')
+    
     uploaded_files = []
     
     for file in files:
@@ -247,10 +256,12 @@ def wiki_upload():
     
     if uploaded_files:
         face_state['ingest_requested'] = True
+        face_state['ingest_category'] = category # Salva la categoria (può essere None)
         return jsonify({
             "status": "success", 
             "message": f"Caricati {len(uploaded_files)} file",
-            "files": uploaded_files
+            "files": uploaded_files,
+            "category": category
         })
     
     return jsonify({"status": "error", "message": "Nessun file valido"}), 400
