@@ -21,6 +21,7 @@ echo "--- Verifica dipendenze... ---"
 pip install --quiet --upgrade pip
 pip install --quiet -r requirements.txt
 
+
 # Analisi parametri
 DEBUG_MODE=false
 for arg in "$@"; do
