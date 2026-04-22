@@ -55,7 +55,7 @@ VOSK_MODEL_PATH = os.path.join("models", VOSK_MODEL_NAME)
 VOSK_MODEL_URL = f"https://alphacephei.com/vosk/models/{VOSK_MODEL_NAME}.zip"
 WAKE_WORDS = ["absalom","absalon","assalom","assalon","okron","ok ron", "ok on","ciaoron","ciao ron","sauron", "ciao", "ciao rom"]
 
-SAMPLE_RATE = 16000
+SAMPLE_RATE = 44100
 
 q = queue.Queue()
 INACTIVITY_TIMEOUT = 120  # 120 secondi di inattività per lo standby
