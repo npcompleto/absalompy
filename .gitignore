@@ -209,3 +209,7 @@ models/vosk*
 
 speech_chunk.wav 
 speech.wav
+
+wiki/entries/*
+wiki/raw/*
+memory/*
