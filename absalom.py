@@ -20,7 +20,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 from tools.school_tool import add_school_event, list_school_events
-from tools.time_tool import get_next_week_start_date
+from tools.time_tool import get_next_week_start_date, set_alarm
 from tools.wiki_tool import wiki_list_entries, wiki_read, wiki_write, wiki_search, wiki_ingest_raw
 from db import init_db
 from dotenv import load_dotenv
@@ -83,7 +83,16 @@ telegram_bot = None
 _piper_voice = None
 
 # Lista dei tool disponibili per LangChain
-tools = [list_school_events, get_next_week_start_date, wiki_list_entries, wiki_read, wiki_write, wiki_search, wiki_ingest_raw]
+tools = [
+    list_school_events, 
+    get_next_week_start_date, 
+    set_alarm,
+    wiki_list_entries, 
+    wiki_read, 
+    wiki_write, 
+    wiki_search, 
+    wiki_ingest_raw
+]
 # Mappatura per l'esecuzione automatica dei tool basata sul nome
 tool_map = {tool.name: tool for tool in tools}
 
@@ -568,6 +577,56 @@ def remote_commands_worker():
             # Silenzioso per non sporcare i log se il server è momentaneamente giù
             pass
 
+def alarm_worker():
+    """Background worker che controlla gli allarmi impostati."""
+    print("--- Alarm Worker avviato ---")
+    alarms_path = "persona/alarms.json"
+    
+    last_checked_minute = ""
+    
+    while True:
+        try:
+            now = datetime.now()
+            current_time = now.strftime("%H:%M")
+            
+            # Controlla solo una volta al minuto
+            if current_time != last_checked_minute:
+                last_checked_minute = current_time
+                
+                if os.path.exists(alarms_path):
+                    with open(alarms_path, "r", encoding="utf-8") as f:
+                        alarms = json.load(f)
+                    
+                    updated = False
+                    for alarm in alarms:
+                        if alarm.get("active") and alarm.get("time") == current_time:
+                            print(f"[!] SVEGLIA! Orario raggiunto: {current_time}")
+                            
+                            # Sveglia Absalom
+                            face.set_mode("awake")
+                            
+                            # Messaggio personalizzato o generico
+                            msg = alarm.get("message")
+                            
+                            if not msg:
+                                msg = "Genera un bel messaggio motivaziona per svegliarmi"
+                            msg = ask_llm("L'utente ha chiesto di essere avvisato:"+msg)
+                            # Esegui la sveglia in modo che possa parlare
+                            speak(msg)
+                            
+                            # Disattiva l'allarme
+                            alarm["active"] = False
+                            updated = True
+                    
+                    if updated:
+                        with open(alarms_path, "w", encoding="utf-8") as f:
+                            json.dump(alarms, f, indent=4)
+                            
+        except Exception as e:
+            print(f"Errore nell'alarm_worker: {e}")
+        
+        time.sleep(30) # Controlla ogni 30 secondi
+
 def dreaming_worker():
     """Processo di background che 'sogna' quando il robot dorme."""
     print("--- Dreaming Worker avviato ---")
@@ -586,6 +645,9 @@ if __name__ == "__main__":
     
     # Avvio thread comandi remoti
     threading.Thread(target=remote_commands_worker, daemon=True).start()
+    
+    # Avvio thread allarmi
+    threading.Thread(target=alarm_worker, daemon=True).start()
     
     # Avvio thread sogni
     threading.Thread(target=dreaming_worker, daemon=True).start()

@@ -92,3 +92,47 @@ def get_next_week_start_date():
     
     print(f"La data di inizio della prossima settimana è: {result}")
     return result
+@tool
+def set_alarm(time_str: str, message: str = None):
+    """Imposta una sveglia a un orario specifico.
+
+    Usa questo tool quando l'utente chiede di impostare una sveglia o un promemoria per un orario preciso.
+    Formatta l'orario come HH:MM.
+    
+    Esempio: \"Svegliami alle 07:30\", \"Imposta una sveglia per le 14:00\"
+    
+    Output: Messaggio di conferma.
+    """
+    import json
+    import os
+    
+    # Validazione base formato HH:MM
+    try:
+        datetime.strptime(time_str, "%H:%M")
+    except ValueError:
+        return "Formato orario non valido. Usa HH:MM (es. 07:30)."
+
+    alarm_data = {
+        "time": time_str,
+        "message": message,
+        "active": True
+    }
+    
+    alarms_path = "persona/alarms.json"
+    os.makedirs(os.path.dirname(alarms_path), exist_ok=True)
+    
+    alarms = []
+    if os.path.exists(alarms_path):
+        try:
+            with open(alarms_path, "r", encoding="utf-8") as f:
+                alarms = json.load(f)
+        except:
+            alarms = []
+            
+    alarms.append(alarm_data)
+    
+    with open(alarms_path, "w", encoding="utf-8") as f:
+        json.dump(alarms, f, indent=4)
+        
+    print(f"Sveglia impostata per le {time_str}")
+    return f"Sveglia impostata correttamente per le {time_str}."
