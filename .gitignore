@@ -210,6 +210,6 @@ models/vosk*
 speech_chunk.wav 
 speech.wav
 
-wiki/entries/*
-wiki/raw/*
-memory/*
+persona/wiki/entries/*
+persona/wiki/raw/*
+persona/memory/*
