@@ -1,4 +1,5 @@
 import time
+import numpy as np
 import os
 import sys
 import argparse
@@ -55,13 +56,23 @@ VOSK_MODEL_PATH = os.path.join("models", VOSK_MODEL_NAME)
 VOSK_MODEL_URL = f"https://alphacephei.com/vosk/models/{VOSK_MODEL_NAME}.zip"
 WAKE_WORDS = ["absalom","absalon","assalom","assalon","okron","ok ron", "ok on","ciaoron","ciao ron","sauron", "ciao", "ciao rom"]
 
-SAMPLE_RATE = 44100
+VOSK_RATE = 16000
+
 AUDIO_DEVICE_INDEX = os.getenv("AUDIO_DEVICE_INDEX")
 if AUDIO_DEVICE_INDEX:
     try:
         AUDIO_DEVICE_INDEX = int(AUDIO_DEVICE_INDEX)
     except ValueError:
         pass
+
+# Rilevamento automatico SAMPLE_RATE dal sistema
+try:
+    device_info = sd.query_devices(AUDIO_DEVICE_INDEX, 'input')
+    SAMPLE_RATE = int(device_info['default_samplerate'])
+    print(f"--- Audio device [{AUDIO_DEVICE_INDEX if AUDIO_DEVICE_INDEX is not None else 'default'}] detected: {device_info['name']} at {SAMPLE_RATE} Hz ---")
+except Exception as e:
+    print(f"!!! Error querying audio device: {e}. Falling back to 44100 Hz !!!")
+    SAMPLE_RATE = 44100
 
 q = queue.Queue()
 INACTIVITY_TIMEOUT = 120  # 120 secondi di inattività per lo standby
@@ -362,7 +373,19 @@ def callback(indata, frames, time, status):
     if status:
         print(status, file=sys.stderr)
     if not face.get_robot_status().get("is_busy"):
-        q.put(bytes(indata))
+        # Se la frequenza hardware è diversa da quella di Vosk (16000), ricampioniamo
+        if SAMPLE_RATE != VOSK_RATE:
+            audio_data = np.frombuffer(indata, dtype=np.int16)
+            num_samples = len(audio_data)
+            new_num_samples = int(num_samples * VOSK_RATE / SAMPLE_RATE)
+            resampled_audio = np.interp(
+                np.linspace(0, num_samples, new_num_samples, endpoint=False),
+                np.arange(num_samples),
+                audio_data
+            ).astype(np.int16)
+            q.put(resampled_audio.tobytes())
+        else:
+            q.put(bytes(indata))
 
 def start_assistant(debug=False):
     # Esegui il suono di avvio
@@ -395,7 +418,8 @@ def start_assistant(debug=False):
     # Initialize model
     model = Model(VOSK_MODEL_PATH)
     # Avviamo con un recognizer completo per catturare sia la wakeword che il comando insieme
-    rec = KaldiRecognizer(model, SAMPLE_RATE)
+    # Vosk preferisce 16000 Hz, quindi usiamo VOSK_RATE
+    rec = KaldiRecognizer(model, VOSK_RATE)
 
     print(f"\n>>> Absalom OS avviato. In ascolto per la parola chiave: '{WAKE_WORDS}'...")
     face.set_loading(False)
