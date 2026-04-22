@@ -26,6 +26,8 @@ from dotenv import load_dotenv
 from datetime import datetime
 import threading
 from telegram_manager import TelegramManager
+from face_client import FaceClient
+from constants import SLEEP_PHRASES, THINKING_PHRASES, TOOL_PHRASES
 
 # Carica variabili d'ambiente da .env
 # LLM Configuration
@@ -51,121 +53,24 @@ BASE_URL = "http://127.0.0.1:5000"
 MODEL_PATH = "model"
 MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-it-0.22.zip"
 WAKE_WORDS = ["absalom","absalon","assalom","assalon","okron","ok ron", "ok on","ciaoron","ciao ron","sauron", "ciao", "ciao rom"]
-SLEEP_PHRASES = [
-    "Vado in standby",
-    "Buonanotte",
-    "Che sonno! Buonanotte.",
-    "Ci sentiamo dopo",
-    "A dopo"
-]
-
-THINKING_PHRASES = [
-    "Fammi pensare",
-    "Un momento",
-    "Ci penso un attimo",
-    "Ok!"
-]
-
-TOOL_PHRASES = [
-    "Ancora un attimo",
-    "Devo verificare ancora una cosa",
-    "Ci sono quasi",
-    "Controllo prima una cosa"
-]
 
 SAMPLE_RATE = 16000
 
 q = queue.Queue()
-is_busy = False
-is_awake = False
-is_speaking = False
 INACTIVITY_TIMEOUT = 120  # 120 secondi di inattività per lo standby
 last_interaction_time = 0
-busy_lock = threading.Lock()
+
 telegram_bot = None
 
 _piper_voice = None
-last_interaction_time = 0
 
 # Lista dei tool disponibili per LangChain
 tools = [list_school_events, get_next_week_start_date, wiki_list_entries, wiki_read, wiki_write, wiki_search, wiki_ingest_raw]
 # Mappatura per l'esecuzione automatica dei tool basata sul nome
 tool_map = {tool.name: tool for tool in tools}
 
-def blink():
-    print("Inviando comando blink...")
-    requests.post(f"{BASE_URL}/blink")
-
-def set_mode(mode):
-    print(f"Impostando modalità a: {mode}")
-    try:
-        r = requests.post(f"{BASE_URL}/control", json={"mode": mode})
-        return r.json()
-    except Exception as e:
-        print(f"Errore: {e}")
-
-def set_busy(busy_status):
-    try:
-        requests.post(f"{BASE_URL}/control", json={"busy": busy_status})
-    except Exception as e:
-        print(f"Errore set_busy: {e}")
-
-def set_speaking(speaking_status):
-    try:
-        requests.post(f"{BASE_URL}/control", json={"speaking": speaking_status})
-    except Exception as e:
-        print(f"Errore set_speaking: {e}")
-
-def set_loading(loading_status):
-    try:
-        requests.post(f"{BASE_URL}/control", json={"loading": loading_status})
-    except Exception as e:
-        print(f"Errore set_loading: {e}")
-
-def set_angry(angry_status):
-    try:
-        requests.post(f"{BASE_URL}/control", json={"angry": angry_status})
-    except Exception as e:
-        print(f"Errore set_angry: {e}")
-
-def set_sad(sad_status):
-    try:
-        requests.post(f"{BASE_URL}/control", json={"sad": sad_status})
-    except Exception as e:
-        print(f"Errore set_sad: {e}")
-
-def set_last_interaction(user_text, bot_text):
-    try:
-        requests.post(f"{BASE_URL}/control", json={
-            "last_interaction": {
-                "user": user_text,
-                "bot": bot_text
-            }
-        })
-    except Exception as e:
-        print(f"Errore set_last_interaction: {e}")
-def reset_face():
-    set_sad(False)
-    set_angry(False)
-    set_loading(False)
-    set_busy_safe(False)
-    set_speaking(False)
-    set_mode("awake")
-
-def get_status():
-    global is_awake, is_busy
-    return {
-        "is_awake": is_awake,
-        "is_busy": is_busy
-    }
-
-def set_busy_safe(status):
-    global is_busy
-    with busy_lock:
-        is_busy = status
-        set_busy(status)
-
-
+# Inizializzazione Client Faccia
+face = FaceClient(BASE_URL)
 
 def get_piper_voice():
     global _piper_voice
@@ -195,8 +100,6 @@ def play_audio(filepath):
         return -1
 
 def speak(text):
-    global is_speaking
-    
     if not isinstance(text, str):
         text = str(text)
     
@@ -214,8 +117,7 @@ def speak(text):
     voice = get_piper_voice()
     filename = "speech_chunk.wav"
     
-    is_speaking = True
-    set_speaking(True)
+    face.set_speaking(True)
     
     try:
         for i, sentence in enumerate(sentences):
@@ -229,11 +131,9 @@ def speak(text):
                     wav_file.writeframes(chunk.audio_int16_bytes)
             
             # Riproduce il pezzo e controlla se è stato interrotto (pkill)
-            is_speaking = True
-            set_speaking(True)
+            face.set_speaking(True)
             return_code = play_audio(filename)
-            is_speaking = False
-            set_speaking(False)
+            face.set_speaking(False)
             
             # Se il processo è stato ucciso (non-zero return code), interrompiamo la lettura dei pezzi successivi
             if return_code != 0:
@@ -243,8 +143,7 @@ def speak(text):
     except Exception as e:
         print(f"Errore durante la sintesi vocale: {e}")
     finally:
-        is_speaking = False
-        set_speaking(False)
+        face.set_speaking(False)
 
 def get_persona():
     """Carica e concatena i file della personalità."""
@@ -425,7 +324,7 @@ def ask_llm(user_input):
         # Sintesi vocale, salvataggio memoria e log della risposta finale
         if final_answer:
             save_to_memory(user_input, final_answer)
-            set_last_interaction(user_input, final_answer)
+            face.set_last_interaction(user_input, final_answer)
         else:
             print("--- Nessuna risposta testuale ricevuta dall'LLM. ---")
             
@@ -443,7 +342,7 @@ def callback(indata, frames, time, status):
     """This is called (from a separate thread) for each audio block."""
     if status:
         print(status, file=sys.stderr)
-    if not is_busy:
+    if not face.get_robot_status().get("is_busy"):
         q.put(bytes(indata))
 
 def download_model():
@@ -465,83 +364,31 @@ def download_model():
 def start_assistant(debug=False):
     # Esegui il suono di avvio
     print("--- Riproduzione suono di avvio ---")
-    set_loading(True)
+    face.set_loading(True)
     play_audio("sounds/startup.mp3")
     init_db()
     bootstrap_model()
     
     
     
-    set_loading(False)
+    face.set_loading(False)
     
     # Inizializza Telegram Bot
     global telegram_bot
     def ask_llm_with_busy(text):
-        set_busy_safe(True)
+        face.set_busy(True)
         try:
             return ask_llm(text)
         finally:
-            set_busy_safe(False)
+            face.set_busy(False)
             
     telegram_bot = TelegramManager(
         ask_callback=ask_llm_with_busy,
         speak_callback=speak,
-        set_mode_callback=set_mode,
-        get_status_callback=get_status
+        set_mode_callback=face.set_mode,
+        get_status_callback=face.get_robot_status
     )
     telegram_bot.start()
-
-    if debug:
-        print("\n>>> Absalom OS avviato in modalità DEBUG (input da tastiera).")
-        print("Scrivi qualcosa per parlare con Absalom (o 'esci' per terminare):")
-        set_mode("awake")
-        while True:
-            try:
-                text = input("\nTu: ")
-                if not text.strip():
-                    continue
-                if text.lower() in ["esci", "quit", "exit"]:
-                    break
-                
-                if text.lower().startswith("/emo"):
-                    parts = text.split()
-                    if len(parts) < 2:
-                        print("Uso: /emo [sad|nosad|angry|noangry|loading|noloading|awake|asleep|reset]")
-                        continue
-                    
-                    cmd = parts[1].lower()
-                    if cmd == "sad": 
-                        reset_face()
-                        set_sad(True)
-                    elif cmd == "nosad": set_sad(False)
-                    elif cmd == "angry": 
-                        reset_face()
-                        set_angry(True)
-                    elif cmd == "noangry": set_angry(False)
-                    elif cmd == "loading": 
-                        reset_face()
-                        set_loading(True)
-                    elif cmd == "noloading": set_loading(False)
-                    elif cmd == "awake": set_mode("awake")
-                    elif cmd == "asleep": set_mode("asleep")
-                    elif cmd == "reset":
-                        reset_face()
-                    else:
-                        print(f"Emozione '{cmd}' non riconosciuta.")
-                    continue
-
-                print(f"Analisi richiesta: '{text}'")
-                # In modalità debug saltiamo i thinking phrases per velocità o li teniamo?
-                # Per ora saltiamo sd e vosk
-                response = ask_llm(text)
-                speak(response)
-                
-            except KeyboardInterrupt:
-                break
-            except EOFError:
-                break
-        print("\nUscita dalla modalità DEBUG.")
-        return
 
     if not os.path.exists(MODEL_PATH):
         download_model()
@@ -553,20 +400,20 @@ def start_assistant(debug=False):
 
     print(f"\n>>> Absalom OS avviato. In ascolto per la parola chiave: '{WAKE_WORDS}'...")
 
-    global is_busy
-    global is_awake
-    global last_interaction_time
+    is_busy = face.get_robot_status().get("is_busy", False)
+    is_awake = face.get_robot_status().get("is_awake", False)
+    last_interaction_time = 0
     
     try:
         with sd.RawInputStream(samplerate=SAMPLE_RATE, blocksize=8000, dtype='int16',
                                channels=1, callback=callback):
             while True:
                 # Timer di inattività: se sveglio e timeout superato, vai in standby
-                if is_awake and (time.time() - last_interaction_time > INACTIVITY_TIMEOUT):
+                if is_awake and (time.time() - last_interaction_time > INACTIVITY_TIMEOUT) and not face.is_speaking():
                     print("\n[!] Timeout di inattività raggiunto. Standby...")
                     phrase = random.choice(SLEEP_PHRASES)
                     speak(phrase)
-                    set_mode("asleep")
+                    face.set_mode("asleep")
                     is_awake = False
                 
                 try:
@@ -597,16 +444,16 @@ def start_assistant(debug=False):
                         
                         if not is_awake:
                             is_awake = True
-                            set_mode("awake")
+                            face.set_mode("awake")
                             print("Svegliato dalla wakeword.")
                         
-                        set_busy_safe(True)
+                        face.set_busy(True)
                         
                         if command:
                             if command == "addormentati":
                                 phrase = random.choice(SLEEP_PHRASES)
                                 speak(phrase)
-                                set_mode("asleep")
+                                face.set_mode("asleep")
                                 is_awake = False
                             else:
                                 print(f"Comando diretto rilevato: '{command}'")
@@ -621,7 +468,7 @@ def start_assistant(debug=False):
                         while not q.empty():
                             try: q.get_nowait()
                             except queue.Empty: break
-                        set_busy_safe(False)
+                        face.set_busy(False)
                         
                     else:
                         # Se siamo addormentati e non sentiamo la wakeword, ignoriamo il testo
@@ -635,30 +482,30 @@ def start_assistant(debug=False):
 
 def remote_commands_worker():
     """Thread di background che interroga il server per comandi remoti (es. da Web UI)."""
-    global is_busy
     print("--- Remote Commands Worker avviato ---")
     while True:
         try:
             time.sleep(3) # Polling ogni 3 secondi
             
             # Se siamo già occupati, saltiamo il polling per questo ciclo
-            if is_busy:
+            if face.get_robot_status().get("is_busy"):
                 continue
                 
-            response = requests.get(f"{BASE_URL}/status")
-            if response.status_code == 200:
-                state = response.json()
+            state = face.get_full_status()
+            if state:
+                # Sincronizza lo stato locale con quello del server
+                face.set_busy(state.get("busy", False))
+                is_awake = (state.get("mode") == "awake")
                 
                 # Controllo Trigger Wiki Ingest
                 if state.get("ingest_requested"):
                     print("[!] Ricevuto segnale di ingestione Wiki da Web UI.")
                     
-                    with busy_lock:
-                        is_busy = True
+                    face.set_busy(True)
                     
                     try:
                         # Reset del trigger sul server prima di iniziare
-                        requests.post(f"{BASE_URL}/control", json={"ingest_requested": False})
+                        face.reset_ingest_trigger()
                         
                         # Feedback vocale come richiesto
                         speak("Ho ricevuto i documenti. Passo subito i documenti al Bibliotecario per l'archiviazione.")
@@ -667,30 +514,27 @@ def remote_commands_worker():
                         ingest_response = ask_llm("Bibliotecario, ingerisci i file presenti nella cartella raw nella Wiki e sintetizzali.")
                         speak(ingest_response)
                     finally:
-                        with busy_lock:
-                            is_busy = False
+                        face.set_busy(False)
                 
                 # Controllo Messaggi Chat da Web
                 if state.get("pending_chat_msg"):
                     chat_msg = state.get("pending_chat_msg")
                     print(f"[!] Ricevuto messaggio chat da Web: '{chat_msg}'")
                     
-                    with busy_lock:
-                        is_busy = True
+                    face.set_busy(True)
                     
                     try:
                         # Reset del messaggio pendente sul server
-                        requests.post(f"{BASE_URL}/control", json={"pending_chat_msg": None})
+                        face.reset_pending_chat()
                         
                         # Elaborazione tramite LLM
                         response = ask_llm(chat_msg)
                         
                         # Salvataggio risposta per la Web UI e speak
-                        requests.post(f"{BASE_URL}/control", json={"chat_response": response})
+                        face.send_chat_response(response)
                         speak(response)
                     finally:
-                        with busy_lock:
-                            is_busy = False
+                        face.set_busy(False)
         except Exception as e:
             # Silenzioso per non sporcare i log se il server è momentaneamente giù
             pass
