@@ -55,7 +55,13 @@ VOSK_MODEL_PATH = os.path.join("models", VOSK_MODEL_NAME)
 VOSK_MODEL_URL = f"https://alphacephei.com/vosk/models/{VOSK_MODEL_NAME}.zip"
 WAKE_WORDS = ["absalom","absalon","assalom","assalon","okron","ok ron", "ok on","ciaoron","ciao ron","sauron", "ciao", "ciao rom"]
 
-SAMPLE_RATE = 48000
+SAMPLE_RATE = 44100
+AUDIO_DEVICE_INDEX = os.getenv("AUDIO_DEVICE_INDEX")
+if AUDIO_DEVICE_INDEX:
+    try:
+        AUDIO_DEVICE_INDEX = int(AUDIO_DEVICE_INDEX)
+    except ValueError:
+        pass
 
 q = queue.Queue()
 INACTIVITY_TIMEOUT = 120  # 120 secondi di inattività per lo standby
@@ -74,17 +80,13 @@ tool_map = {tool.name: tool for tool in tools}
 face = FaceClient(BASE_URL)
 
 def download_model():
+    os.makedirs(os.path.dirname(VOSK_MODEL_PATH), exist_ok=True)
     print(f"--- Modello non trovato. Download in corso da {VOSK_MODEL_URL} ---")
-    zip_path = VOSK_MODEL_PATH + ".zip"
+    zip_path = VOSK_MODEL_NAME + ".zip"
     urllib.request.urlretrieve(VOSK_MODEL_URL, zip_path)
     print("Download completato. Estrazione...")
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(".")
-
-    # Rename extracted folder to 'model'
-    extracted_folder = VOSK_MODEL_NAME
-    if os.path.exists(extracted_folder):
-        os.rename(extracted_folder, VOSK_MODEL_PATH)
+        zip_ref.extractall("models")
     
     os.remove(zip_path)
     print("Modello pronto.\n")
@@ -403,7 +405,7 @@ def start_assistant(debug=False):
     
     try:
         with sd.RawInputStream(samplerate=SAMPLE_RATE, blocksize=8000, dtype='int16',
-                               channels=1, callback=callback):
+                               channels=1, callback=callback, device=AUDIO_DEVICE_INDEX):
             while True:
                 # Timer di inattività: se sveglio e timeout superato, vai in standby
                 if is_awake and (time.time() - last_interaction_time > INACTIVITY_TIMEOUT) and not face.is_speaking():
