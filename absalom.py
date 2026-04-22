@@ -11,6 +11,7 @@ import urllib.request
 import random
 import sounddevice as sd
 from vosk import Model, KaldiRecognizer
+from faster_whisper import WhisperModel
 import requests
 from piper.voice import PiperVoice
 import wave
@@ -57,6 +58,10 @@ VOSK_MODEL_URL = f"https://alphacephei.com/vosk/models/{VOSK_MODEL_NAME}.zip"
 WAKE_WORDS = ["absalom","absalon","assalom","assalon","okron","ok ron", "ok on","ciaoron","ciao ron","sauron", "ciao", "ciao rom"]
 
 VOSK_RATE = 16000
+
+# Inizializza Whisper (usiamo tiny per velocità, soprattutto su Raspberry Pi)
+print("--- Caricamento modello Whisper (tiny)... ---")
+whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8")
 
 AUDIO_DEVICE_INDEX = os.getenv("AUDIO_DEVICE_INDEX")
 if AUDIO_DEVICE_INDEX:
@@ -414,9 +419,9 @@ def start_assistant(debug=False):
     
     # Initialize model
     model = Model(VOSK_MODEL_PATH)
-    # Avviamo con un recognizer completo per catturare sia la wakeword che il comando insieme
-    # Vosk preferisce 16000 Hz, quindi usiamo VOSK_RATE
-    rec = KaldiRecognizer(model, VOSK_RATE)
+    # Avviamo con un recognizer LIMITATO alle sole wakewords + [unk] per efficienza
+    grammar = json.dumps(WAKE_WORDS + ["[unk]"])
+    rec = KaldiRecognizer(model, VOSK_RATE, grammar)
 
     print(f"\n>>> Absalom OS avviato. In ascolto per la parola chiave: '{WAKE_WORDS}'...")
     face.set_loading(False)
@@ -458,44 +463,103 @@ def start_assistant(debug=False):
                     result = json.loads(rec.Result())
                     text = result.get("text", "").lower().strip()
                     
+                    # Se non abbiamo sentito nulla, ignoriamo
                     if not text:
                         continue
-                    
-                    print(f"DEBUG: Sentito -> '{text}'")
-                    
-                    # Cerca se nel testo è presente una delle wakeword
+                        
+                    # Cerchiamo se una delle wakeword è stata rilevata da Vosk
                     trigger_word = next((w for w in WAKE_WORDS if w in text), None)
                     
                     if trigger_word:
-                        print(f"\n[!] Wakeword '{trigger_word}' rilevata!")
-                        last_interaction_time = time.time()
+                        print(f"\n[!] Wakeword '{trigger_word}' rilevata tramite Vosk!")
                         
-                        # Estrae il comando rimuovendo la wakeword
-                        command = text.replace(trigger_word, "").strip()
-                        # Rimuove eventuale punteggiatura iniziale/finale dal comando
-                        command = re.sub(r'^[,.!?;:\s]+|[,.!?;:\s]+$', '', command)
+                        # Riproduce il suono di conferma
+                        play_audio("sounds/bubblepop.mp3")
                         
                         if not is_awake:
                             is_awake = True
                             face.set_mode("awake")
-                            print("Svegliato dalla wakeword.")
                         
+                        # Svuotiamo la coda per ignorare l'audio precedente (inclusa la wakeword e il bip)
+                        while not q.empty():
+                            try:
+                                q.get_nowait()
+                            except queue.Empty:
+                                break
+                                
+                        print(">>> In ascolto per 5 secondi con Whisper...")
+                        face.set_loading(True)
+                        
+                        whisper_buffer = []
+                        start_time = time.time()
+                        
+                        # Ascolto per 5 secondi esatti
+                        while time.time() - start_time < 5:
+                            try:
+                                # Timeout breve per controllare il ciclo del tempo
+                                d = q.get(timeout=0.5)
+                                if SAMPLE_RATE != VOSK_RATE:
+                                    audio_data = np.frombuffer(d, dtype=np.int16)
+                                    num_samples = len(audio_data)
+                                    new_num_samples = int(num_samples * VOSK_RATE / SAMPLE_RATE)
+                                    resampled_audio = np.interp(
+                                        np.linspace(0, num_samples, new_num_samples, endpoint=False),
+                                        np.arange(num_samples),
+                                        audio_data
+                                    ).astype(np.int16)
+                                    whisper_buffer.append(resampled_audio)
+                                else:
+                                    whisper_buffer.append(np.frombuffer(d, dtype=np.int16))
+                            except queue.Empty:
+                                continue
+                        
+                        if not whisper_buffer:
+                            face.set_loading(False)
+                            continue
+                        play_audio("sounds/bubblepop.mp3")    
+                        # Uniamo il buffer e convertiamo in float32 per Whisper
+                        full_audio = np.concatenate(whisper_buffer).astype(np.float32) / 32768.0
+                        
+                        # Trascrizione con Whisper
+                        print("--- Trascrizione in corso... ---")
+                        segments, info = whisper_model.transcribe(full_audio, language="it", beam_size=5)
+                        text = " ".join([s.text for s in segments]).strip().lower()
+                        
+                        face.set_loading(False)
+                        
+                        if not text:
+                            print("DEBUG: Whisper non ha rilevato testo.")
+                            continue
+                            
+                        print(f"DEBUG: Whisper ha trascritto -> '{text}'")
+                        
+                        last_interaction_time = time.time()
+                        
+                        # Pulisce il testo dalle wakeword se presenti
+                        command = text
+                        for w in WAKE_WORDS:
+                            command = command.replace(w, "")
+                        command = re.sub(r'^[,.!?;:\s]+|[,.!?;:\s]+$', '', command).strip()
+                        
+                        if not command:
+                            print("DEBUG: Nessun comando dopo la wakeword.")
+                            continue
+                            
+                        # Procediamo con l'elaborazione del comando
                         face.set_busy(True)
-                        
-                        if command:
-                            if command == "addormentati":
-                                phrase = random.choice(SLEEP_PHRASES)
-                                speak(phrase)
-                                face.set_mode("asleep")
-                                is_awake = False
-                            else:
-                                print(f"Comando diretto rilevato: '{command}'")
-                                speak(random.choice(THINKING_PHRASES))
-                                response = ask_llm(command)
-                                speak(response)
-                        else:
-                            # Solo wakeword pronunciata
-                            speak("Eccomi!")
+                        try:
+                            response = ask_llm(command)
+                            face.send_chat_response(response)
+                            speak(response)
+                        finally:
+                            face.set_busy(False)
+                            # Resetta il recognizer per il prossimo ciclo
+                            rec.Reset()
+                            
+                        # Gestione speciale per comando di addormentamento se vogliamo forzarlo via codice
+                        if "addormentati" in command:
+                           face.set_mode("asleep")
+                           is_awake = False
                         
                         # Svuota la coda per evitare loop di feedback o audio accumulato
                         while not q.empty():

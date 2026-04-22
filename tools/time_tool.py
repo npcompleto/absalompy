@@ -100,6 +100,7 @@ def set_alarm(time_str: str, message: str = None):
     Formatta l'orario come HH:MM.
     
     Esempio: \"Svegliami alle 07:30\", \"Imposta una sveglia per le 14:00\"
+    Genera un messaggio motivazione se non viene fornito un messaggio.
     
     Output: Messaggio di conferma.
     """
