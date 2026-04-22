@@ -50,8 +50,9 @@ PIPER_CONFIG_URL = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/it
 
 BASE_URL = "http://127.0.0.1:5000"
 
-MODEL_PATH = "model"
-MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-it-0.22.zip"
+VOSK_MODEL_NAME = "vosk-model-small-it-0.22"
+VOSK_MODEL_PATH = os.path.join("models", VOSK_MODEL_NAME)
+VOSK_MODEL_URL = f"https://alphacephei.com/vosk/models/{VOSK_MODEL_NAME}.zip"
 WAKE_WORDS = ["absalom","absalon","assalom","assalon","okron","ok ron", "ok on","ciaoron","ciao ron","sauron", "ciao", "ciao rom"]
 
 SAMPLE_RATE = 16000
@@ -71,6 +72,22 @@ tool_map = {tool.name: tool for tool in tools}
 
 # Inizializzazione Client Faccia
 face = FaceClient(BASE_URL)
+
+def download_model():
+    print(f"--- Modello non trovato. Download in corso da {VOSK_MODEL_URL} ---")
+    zip_path = VOSK_MODEL_PATH + ".zip"
+    urllib.request.urlretrieve(VOSK_MODEL_URL, zip_path)
+    print("Download completato. Estrazione...")
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(".")
+
+    # Rename extracted folder to 'model'
+    extracted_folder = VOSK_MODEL_NAME
+    if os.path.exists(extracted_folder):
+        os.rename(extracted_folder, VOSK_MODEL_PATH)
+    
+    os.remove(zip_path)
+    print("Modello pronto.\n")
 
 def get_piper_voice():
     global _piper_voice
@@ -345,22 +362,6 @@ def callback(indata, frames, time, status):
     if not face.get_robot_status().get("is_busy"):
         q.put(bytes(indata))
 
-def download_model():
-    print(f"--- Modello non trovato. Download in corso da {MODEL_URL} ---")
-    zip_path = "model.zip"
-    urllib.request.urlretrieve(MODEL_URL, zip_path)
-    print("Download completato. Estrazione...")
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(".")
-    
-    # Rename extracted folder to 'model'
-    extracted_folder = "vosk-model-it-0.22"
-    if os.path.exists(extracted_folder):
-        os.rename(extracted_folder, MODEL_PATH)
-    
-    os.remove(zip_path)
-    print("Modello pronto.\n")
-
 def start_assistant(debug=False):
     # Esegui il suono di avvio
     print("--- Riproduzione suono di avvio ---")
@@ -368,10 +369,6 @@ def start_assistant(debug=False):
     play_audio("sounds/startup.mp3")
     init_db()
     bootstrap_model()
-    
-    
-    
-    face.set_loading(False)
     
     # Inizializza Telegram Bot
     global telegram_bot
@@ -390,16 +387,16 @@ def start_assistant(debug=False):
     )
     telegram_bot.start()
 
-    if not os.path.exists(MODEL_PATH):
+    if not os.path.exists(VOSK_MODEL_PATH):
         download_model()
-
+    
     # Initialize model
-    model = Model(MODEL_PATH)
+    model = Model(VOSK_MODEL_PATH)
     # Avviamo con un recognizer completo per catturare sia la wakeword che il comando insieme
     rec = KaldiRecognizer(model, SAMPLE_RATE)
 
     print(f"\n>>> Absalom OS avviato. In ascolto per la parola chiave: '{WAKE_WORDS}'...")
-
+    face.set_loading(False)
     is_busy = face.get_robot_status().get("is_busy", False)
     is_awake = face.get_robot_status().get("is_awake", False)
     last_interaction_time = 0
@@ -539,6 +536,17 @@ def remote_commands_worker():
             # Silenzioso per non sporcare i log se il server è momentaneamente giù
             pass
 
+def dreaming_worker():
+    """Processo di background che 'sogna' quando il robot dorme."""
+    print("--- Dreaming Worker avviato ---")
+    while True:
+        try:
+            if not face.is_awake() and not face.is_loading():
+                print("sto sognando")
+        except Exception:
+            pass
+        time.sleep(120) # Aspetta 2 minuti (120 secondi)
+
 if __name__ == "__main__":
     # Creazione delle cartelle se mancano
     os.makedirs("persona/memory", exist_ok=True)
@@ -546,6 +554,9 @@ if __name__ == "__main__":
     
     # Avvio thread comandi remoti
     threading.Thread(target=remote_commands_worker, daemon=True).start()
+    
+    # Avvio thread sogni
+    threading.Thread(target=dreaming_worker, daemon=True).start()
     
     parser = argparse.ArgumentParser(description="Absalom OS Assistant")
     parser.add_argument("--debug", action="store_true", help="Avvia in modalità debug (input da tastiera)")

@@ -93,10 +93,28 @@ class FaceClient:
             }
         return None
 
+    def is_loading(self):
+        state = self.get_full_status()
+        if state:
+            return state.get("loading", False)
+        return False
+
     def is_speaking(self):
         state = self.get_full_status()
         if state:
             return state.get("speaking", False)
+        return False
+
+    def is_awake(self):
+        state = self.get_full_status()
+        if state:
+            return state.get("mode") == "awake"
+        return False
+
+    def is_busy(self):
+        state = self.get_full_status()
+        if state:
+            return state.get("busy", False)
         return False
     
     def reset_face(self):

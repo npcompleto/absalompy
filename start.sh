@@ -19,7 +19,7 @@ source venv/bin/activate
 # Installa/Aggiorna le dipendenze
 echo "--- Verifica dipendenze... ---"
 pip install --quiet --upgrade pip
-pip install -r requirements.txt
+pip install --quiet -r requirements.txt
 
 # Analisi parametri
 DEBUG_MODE=false

@@ -58,3 +58,6 @@ Cosa preferisci?
 Utente: come stai
 Absalom: Stai bene, grazie per aver chiesto! Sono carico e pronto ad aiutarti con quello che ti serve. Che sia per compiti, quiz, informazioni dalla Wiki, calendario scolastico o qualsiasi altra cosa, sono qui. Come posso darti una mano oggi?
 
+Utente: ale
+Absalom: Ehi! Come va? Sono qui se hai bisogno di qualcosa. Che si tratti di compiti, quiz, informazioni dalla Wiki, calendario scolastico o altro, dimmi pure come posso aiutarti!
+
