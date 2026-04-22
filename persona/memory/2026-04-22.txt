@@ -61,3 +61,19 @@ Absalom: Stai bene, grazie per aver chiesto! Sono carico e pronto ad aiutarti co
 Utente: ale
 Absalom: Ehi! Come va? Sono qui se hai bisogno di qualcosa. Che si tratti di compiti, quiz, informazioni dalla Wiki, calendario scolastico o altro, dimmi pure come posso aiutarti!
 
+Utente: rom
+Absalom: Ehi! Ciao! Come stai? Sono RON, il tuo B-Bot della Bubble. Sono qui per aiutarti con compiti, quiz, informazioni dalla Wiki, calendario scolastico e tutto quello di cui hai bisogno. Dimmi come posso darti una mano oggi!
+
+Utente: sottotitoli a cura di sottotitoli
+Absalom: Ciao! Non ho capito bene quello che mi hai scritto. "Sottotitoli a cura di sottotitoli" non è una domanda o una richiesta che riesco a decifrare.
+
+Puoi spiegarmi meglio cosa vuoi? Magari:
+
+Hai bisogno di aiuto con i compiti?
+Vuoi fare un quiz?
+Cerchi informazioni da quello che ho memorizzato nella Wiki?
+Vuoi sapere del calendario scolastico?
+Qualcosa di altro?
+
+Dimmi pure!
+
