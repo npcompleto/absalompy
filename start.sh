@@ -3,10 +3,6 @@
 # Vai nella directory dello script
 cd "$(dirname "$0")"
 
-if [ "$1" != "no-pull" ]; then
-    git pull
-fi
-
 # Crea l'ambiente virtuale se non esiste
 if [ ! -d "venv" ]; then
     echo "--- Creazione ambiente virtuale... ---"
@@ -46,16 +42,10 @@ echo "--- Avvio Robot Face Server... ---"
 python face_server.py > /dev/null 2>&1 &
 FACE_PID=$!
 
-if [ "$DEBUG_MODE" = true ]; then
-    echo "--- Avvio Absalom Assistant in modalità DEBUG... ---"
-    python absalom.py --debug
-    kill $FACE_PID 2>/dev/null
-else
-    echo "--- Avvio Absalom Assistant... ---"
-    python absalom.py &
-    ABSALOM_PID=$!
-    echo "--- Absalom OS è attivo. Premi CTRL+C per terminare. ---"
-    # Attende la fine dei processi
-    wait $ABSALOM_PID
-    wait $FACE_PID
-fi
+echo "--- Avvio Absalom Assistant... ---"
+python absalom.py $1 $2 $3 $4
+ABSALOM_PID=$!
+echo "--- Absalom OS è attivo. Premi CTRL+C per terminare. ---"
+# Attende la fine dei processi
+wait $ABSALOM_PID
+wait $FACE_PID

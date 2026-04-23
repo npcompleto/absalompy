@@ -7,6 +7,7 @@ piper-tts
 ollama
 anthropic
 python-dotenv
+langchain
 langchain-ollama
 langchain-anthropic
 langchain-core
@@ -17,3 +18,5 @@ python-frontmatter
 pymupdf
 Pillow
 faster_whisper
+langchain_community
+ddgs

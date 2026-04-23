@@ -21,6 +21,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 from tools.memory import remember
+from subagents.researcher import research
 from tools.school_tool import add_school_event, list_school_events
 from tools.time_tool import get_next_week_start_date, set_alarm
 from tools.wiki_tool import wiki_list_entries, wiki_read, wiki_write, wiki_search, wiki_ingest_raw
@@ -30,58 +31,18 @@ from datetime import datetime
 import threading
 from telegram_manager import TelegramManager
 from face_client import FaceClient
-from constants import SLEEP_PHRASES, THINKING_PHRASES, TOOL_PHRASES
-
-# Carica variabili d'ambiente da .env
-# LLM Configuration
-
-load_dotenv()
-
-# LLM Configuration
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama-local").strip()
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:1.5b").strip()
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-haiku-20240307").strip()
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "").strip()
-GOOGLE_MODEL = os.getenv("GOOGLE_MODEL", "gemini-2.0-flash").strip()
-
-PIPER_MODEL_DIR = "models/piper"
-PIPER_MODEL_NAME = "it_IT-paola-medium.onnx"
-PIPER_MODEL_PATH = os.path.join(PIPER_MODEL_DIR, PIPER_MODEL_NAME)
-PIPER_CONFIG_PATH = PIPER_MODEL_PATH + ".json"
-PIPER_MODEL_URL = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/it/it_IT/paola/medium/{PIPER_MODEL_NAME}?download=true"
-PIPER_CONFIG_URL = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/it/it_IT/paola/medium/{PIPER_MODEL_NAME}.json?download=true"
-
-BASE_URL = "http://127.0.0.1:5000"
-
-VOSK_MODEL_NAME = "vosk-model-small-it-0.22"
-VOSK_MODEL_PATH = os.path.join("models", VOSK_MODEL_NAME)
-VOSK_MODEL_URL = f"https://alphacephei.com/vosk/models/{VOSK_MODEL_NAME}.zip"
-WAKE_WORDS = ["absalom","absalon","assalom","assalon","okron","ok ron", "ok on","ciaoron","ciao ron","sauron", "ciao", "ciao rom"]
-
-VOSK_RATE = 16000
+import constants
+import config
 
 # Inizializza Whisper (usiamo tiny per velocità, soprattutto su Raspberry Pi)
 print("--- Caricamento modello Whisper (tiny)... ---")
 whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8")
 
-AUDIO_DEVICE_INDEX = os.getenv("AUDIO_DEVICE_INDEX")
-if AUDIO_DEVICE_INDEX:
-    try:
-        AUDIO_DEVICE_INDEX = int(AUDIO_DEVICE_INDEX)
-    except ValueError:
-        pass
 
-# Rilevamento automatico SAMPLE_RATE dal sistema
-try:
-    device_info = sd.query_devices(AUDIO_DEVICE_INDEX, 'input')
-    SAMPLE_RATE = int(device_info['default_samplerate'])
-    print(f"--- Audio device [{AUDIO_DEVICE_INDEX if AUDIO_DEVICE_INDEX is not None else 'default'}] detected: {device_info['name']} at {SAMPLE_RATE} Hz ---")
-except Exception as e:
-    print(f"!!! Error querying audio device: {e}. Falling back to 44100 Hz !!!")
-    SAMPLE_RATE = 44100
+
+
 
 q = queue.Queue()
-INACTIVITY_TIMEOUT = 120  # 120 secondi di inattività per lo standby
 last_interaction_time = 0
 
 telegram_bot = None
@@ -98,18 +59,19 @@ tools = [
     wiki_write, 
     wiki_search, 
     wiki_ingest_raw,
-    remember
+    remember,
+    research
 ]
 # Mappatura per l'esecuzione automatica dei tool basata sul nome
 tool_map = {tool.name: tool for tool in tools}
 
 # Inizializzazione Client Faccia
-face = FaceClient(BASE_URL)
+face = FaceClient(config.BASE_URL)
 
 def download_model():
-    os.makedirs(os.path.dirname(VOSK_MODEL_PATH), exist_ok=True)
-    print(f"--- Modello non trovato. Download in corso da {VOSK_MODEL_URL} ---")
-    zip_path = VOSK_MODEL_NAME + ".zip"
+    os.makedirs(os.path.dirname(config.VOSK_MODEL_PATH), exist_ok=True)
+    print(f"--- Modello non trovato. Download in corso da {config.VOSK_MODEL_URL} ---")
+    zip_path = config.VOSK_MODEL_NAME + ".zip"
     urllib.request.urlretrieve(VOSK_MODEL_URL, zip_path)
     print("Download completato. Estrazione...")
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -121,13 +83,13 @@ def download_model():
 def get_piper_voice():
     global _piper_voice
     if _piper_voice is None:
-        if not os.path.exists(PIPER_MODEL_PATH) or not os.path.exists(PIPER_CONFIG_PATH):
+        if not os.path.exists(config.PIPER_MODEL_PATH) or not os.path.exists(config.PIPER_CONFIG_PATH):
             print("--- Download modello Piper in corso... ---")
-            os.makedirs(PIPER_MODEL_DIR, exist_ok=True)
-            urllib.request.urlretrieve(PIPER_MODEL_URL, PIPER_MODEL_PATH)
-            urllib.request.urlretrieve(PIPER_CONFIG_URL, PIPER_CONFIG_PATH)
+            os.makedirs(config.PIPER_MODEL_DIR, exist_ok=True)
+            urllib.request.urlretrieve(config.PIPER_MODEL_URL, config.PIPER_MODEL_PATH)
+            urllib.request.urlretrieve(config.PIPER_CONFIG_URL, config.PIPER_CONFIG_PATH)
             print("--- Modello Piper pronto. ---")
-        _piper_voice = PiperVoice.load(PIPER_MODEL_PATH, config_path=PIPER_CONFIG_PATH)
+        _piper_voice = PiperVoice.load(config.PIPER_MODEL_PATH, config_path=config.PIPER_CONFIG_PATH)
     return _piper_voice
 
 def play_audio(filepath):
@@ -196,7 +158,7 @@ def get_persona():
     persona = ""
     try:
         # Carichiamo sia l'identità principale che quella del Bibliotecario/Wiki
-        for filename in ["Identity.md", "Librarian.md", "Researcher.md"]:
+        for filename in ["Identity.md", "Librarian.md"]:
             path = os.path.join("persona", filename)
             if os.path.exists(path):
                 with open(path, "r") as f:
@@ -243,10 +205,10 @@ def get_long_term_memory():
 
 def bootstrap_model():
     print("--- Avvio bootstrap del modello, solo se locale... ---")
-    if LLM_PROVIDER == "ollama-local":
+    if config.LLM_PROVIDER == "ollama-local":
         try:
             # Prova a caricare il modello
-            llm = ChatOllama(model=OLLAMA_MODEL)
+            llm = ChatOllama(model=config.OLLAMA_MODEL)
             ai_msg = llm.invoke("Hello")
             print("--- Modello locale caricato con successo. ---")
         except Exception as e:
@@ -270,12 +232,12 @@ def ask_llm(user_input):
     
     # Inizializzazione del modello LangChain corretto
     try:
-        if LLM_PROVIDER == "anthropic":
-            llm = ChatAnthropic(model=ANTHROPIC_MODEL)
-        elif LLM_PROVIDER == "google":
-            llm = ChatGoogleGenerativeAI(model=GOOGLE_MODEL, google_api_key=GOOGLE_API_KEY)
+        if config.LLM_PROVIDER == "anthropic":
+            llm = ChatAnthropic(model=config.ANTHROPIC_MODEL)
+        elif config.LLM_PROVIDER == "google":
+            llm = ChatGoogleGenerativeAI(model=config.GOOGLE_MODEL, google_api_key=config.GOOGLE_API_KEY)
         else:
-            llm = ChatOllama(model=OLLAMA_MODEL)
+            llm = ChatOllama(model=config.OLLAMA_MODEL)
         
         # Binding dei tool alla catena
         llm_with_tools = llm.bind_tools(tools)
@@ -319,7 +281,7 @@ def ask_llm(user_input):
                     if tool_name == "list_school_events":
                         speak("Sto controllando sul registro elettronico.")
                     else:
-                        speak(random.choice(TOOL_PHRASES))
+                        speak(random.choice(constants.TOOL_PHRASES))
                         
                     try:
                         tool_output = selected_tool.invoke(tool_call["args"])
@@ -403,7 +365,7 @@ def callback(indata, frames, time, status):
     if not face.get_robot_status().get("is_busy"):
         q.put(bytes(indata))
 
-def start_assistant(debug=False):
+def start_assistant(debug=False, telegram=False):
     # Esegui il suono di avvio
     print("--- Riproduzione suono di avvio ---")
     face.set_loading(True)
@@ -411,46 +373,47 @@ def start_assistant(debug=False):
     init_db()
     bootstrap_model()
     
-    # Inizializza Telegram Bot
-    global telegram_bot
-    def ask_llm_with_busy(text):
-        face.set_busy(True)
-        try:
-            return ask_llm(text)
-        finally:
-            face.set_busy(False)
+    if telegram:
+        # Inizializza Telegram Bot
+        global telegram_bot
+        def ask_llm_with_busy(text):
+            face.set_busy(True)
+            try:
+                return ask_llm(text)
+            finally:
+                face.set_busy(False)
             
-    telegram_bot = TelegramManager(
-        ask_callback=ask_llm_with_busy,
-        speak_callback=speak,
-        set_mode_callback=face.set_mode,
-        get_status_callback=face.get_robot_status
-    )
-    telegram_bot.start()
+        telegram_bot = TelegramManager(
+            ask_callback=ask_llm_with_busy,
+            speak_callback=speak,
+            set_mode_callback=face.set_mode,
+            get_status_callback=face.get_robot_status
+        )
+        telegram_bot.start()
 
-    if not os.path.exists(VOSK_MODEL_PATH):
+    if not os.path.exists(config.VOSK_MODEL_PATH):
         download_model()
     
     # Initialize model
-    model = Model(VOSK_MODEL_PATH)
+    model = Model(config.VOSK_MODEL_PATH)
     # Avviamo con un recognizer LIMITATO alle sole wakewords + [unk] per efficienza
-    grammar = json.dumps(WAKE_WORDS + ["[unk]"])
-    rec = KaldiRecognizer(model, VOSK_RATE, grammar)
+    grammar = json.dumps(config.WAKE_WORDS + ["[unk]"])
+    rec = KaldiRecognizer(model, config.VOSK_RATE, grammar)
 
-    print(f"\n>>> Absalom OS avviato. In ascolto per la parola chiave: '{WAKE_WORDS}'...")
+    print(f"\n>>> Absalom OS avviato. In ascolto per la parola chiave: '{config.WAKE_WORDS}'...")
     face.set_loading(False)
     is_busy = face.get_robot_status().get("is_busy", False)
     is_awake = face.get_robot_status().get("is_awake", False)
     last_interaction_time = 0
     
     try:
-        with sd.RawInputStream(samplerate=SAMPLE_RATE, blocksize=16000, dtype='int16',
-                               channels=1, callback=callback, device=AUDIO_DEVICE_INDEX):
+        with sd.RawInputStream(samplerate=config.SAMPLE_RATE, blocksize=16000, dtype='int16',
+                               channels=1, callback=callback, device=config.AUDIO_DEVICE_INDEX):
             while True:
                 # Timer di inattività: se sveglio e timeout superato, vai in standby
-                if is_awake and (time.time() - last_interaction_time > INACTIVITY_TIMEOUT) and not face.is_speaking():
+                if is_awake and (time.time() - last_interaction_time > config.INACTIVITY_TIMEOUT) and not face.is_speaking():
                     print("\n[!] Timeout di inattività raggiunto. Standby...")
-                    phrase = random.choice(SLEEP_PHRASES)
+                    phrase = random.choice(constants.SLEEP_PHRASES)
                     speak(phrase)
                     face.set_mode("asleep")
                     is_awake = False
@@ -459,10 +422,10 @@ def start_assistant(debug=False):
                     data = q.get(timeout=5) # Timeout per permettere il controllo dell'inattività
                     
                     # Se la frequenza hardware è diversa da quella di Vosk (16000), ricampioniamo nel thread principale
-                    if SAMPLE_RATE != VOSK_RATE:
+                    if config.SAMPLE_RATE != config.VOSK_RATE:
                         audio_data = np.frombuffer(data, dtype=np.int16)
                         num_samples = len(audio_data)
-                        new_num_samples = int(num_samples * VOSK_RATE / SAMPLE_RATE)
+                        new_num_samples = int(num_samples * config.VOSK_RATE / config.SAMPLE_RATE)
                         resampled_audio = np.interp(
                             np.linspace(0, num_samples, new_num_samples, endpoint=False),
                             np.arange(num_samples),
@@ -482,7 +445,7 @@ def start_assistant(debug=False):
                         continue
                         
                     # Cerchiamo se una delle wakeword è stata rilevata da Vosk
-                    trigger_word = next((w for w in WAKE_WORDS if w in text), None)
+                    trigger_word = next((w for w in config.WAKE_WORDS if w in text), None)
                     
                     if trigger_word:
                         print(f"\n[!] Wakeword '{trigger_word}' rilevata tramite Vosk!")
@@ -512,10 +475,10 @@ def start_assistant(debug=False):
                             try:
                                 # Timeout breve per controllare il ciclo del tempo
                                 d = q.get(timeout=0.5)
-                                if SAMPLE_RATE != VOSK_RATE:
+                                if config.SAMPLE_RATE != config.VOSK_RATE:
                                     audio_data = np.frombuffer(d, dtype=np.int16)
                                     num_samples = len(audio_data)
-                                    new_num_samples = int(num_samples * VOSK_RATE / SAMPLE_RATE)
+                                    new_num_samples = int(num_samples * config.VOSK_RATE / config.SAMPLE_RATE)
                                     resampled_audio = np.interp(
                                         np.linspace(0, num_samples, new_num_samples, endpoint=False),
                                         np.arange(num_samples),
@@ -732,6 +695,8 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Absalom OS Assistant")
     parser.add_argument("--debug", action="store_true", help="Avvia in modalità debug (input da tastiera)")
+    parser.add_argument("--telegram", action="store_true", help="Avvia in modalità telegram")
     args = parser.parse_args()
+    print(args)
     
-    start_assistant(debug=args.debug)
+    start_assistant(debug=args.debug, telegram=args.telegram)
