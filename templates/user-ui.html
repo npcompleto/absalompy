@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="it">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -55,7 +56,7 @@
             font-family: 'Outfit', sans-serif;
             background: var(--bg);
             background-image: radial-gradient(circle at top right, rgba(0, 210, 255, 0.1), transparent),
-                              radial-gradient(circle at bottom left, rgba(58, 123, 213, 0.1), transparent);
+                radial-gradient(circle at bottom left, rgba(58, 123, 213, 0.1), transparent);
             color: var(--text);
             height: 100vh;
             display: flex;
@@ -140,8 +141,15 @@
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         /* --- Chat Input Area (Inside Box) --- */
@@ -164,6 +172,7 @@
             padding: 0.8rem 1.2rem;
             color: white;
             font-family: inherit;
+            font-size: 16px;
             outline: none;
             transition: border-color 0.3s;
         }
@@ -185,38 +194,54 @@
             transition: transform 0.2s;
         }
 
-        .send-btn:hover { transform: scale(1.05); }
+        .send-btn:hover {
+            transform: scale(1.05);
+        }
 
         @keyframes pulse {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.5); opacity: 0.5; }
-            100% { transform: scale(1); opacity: 1; }
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.5);
+                opacity: 0.5;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
         }
     </style>
 </head>
+
 <body>
 
     <header>
-        <div style="display: flex; justify-content: space-between; align-items: center; max-width: 900px; margin: 0 auto; width: 100%;">
+        <div
+            style="display: flex; justify-content: space-between; align-items: center; max-width: 900px; margin: 0 auto; width: 100%;">
             <div style="text-align: left;">
                 <h1>Absalom Chat Hub</h1>
-                <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px; display: flex; align-items: center;">
+                <div
+                    style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px; display: flex; align-items: center;">
                     <span id="status-dot" class="status-dot"></span>
                     <span id="status-text">Absalom è in standby</span>
                 </div>
             </div>
-            
+
             <div style="display: flex; gap: 10px;">
                 <button id="refresh-history" class="refresh-btn" title="Aggiorna cronologia">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M23 4v6h-6M1.7 19.3L1 23l3.7-.7M23 10a10 10 0 1 0-3 12.3"/>
+                        <path d="M23 4v6h-6M1.7 19.3L1 23l3.7-.7M23 10a10 10 0 1 0-3 12.3" />
                     </svg>
                     <span>Aggiorna</span>
                 </button>
 
                 <a href="/uploads" class="refresh-btn" style="text-decoration: none;" title="Carica documenti">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
                     </svg>
                     <span>Carica</span>
                 </a>
@@ -267,10 +292,10 @@
                 const now = new Date();
                 const offset = now.getTimezoneOffset();
                 const localDate = new Date(now.getTime() - (offset * 60 * 1000)).toISOString().split('T')[0];
-                
+
                 const res = await fetch(`/api/memory/${localDate}`);
                 const data = await res.json();
-                
+
                 if (data.content) {
                     chatContainer.innerHTML = '';
                     const entries = data.content.split('\n\n');
@@ -300,10 +325,10 @@
             try {
                 await fetch('/api/chat', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({message: text})
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text })
                 });
-                
+
                 // Polling per la risposta
                 pollResponse();
             } catch (err) {
@@ -316,18 +341,18 @@
             const interval = setInterval(async () => {
                 const res = await fetch('/status');
                 const state = await res.json();
-                
+
                 if (state.chat_response) {
                     clearInterval(interval);
-                    
+
                     // Ricarica la cronologia completa come richiesto
                     await loadHistory();
-                    
+
                     // Comunica al server che la risposta è stata ricevuta ("consumata")
                     await fetch('/control', {
                         method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({chat_response: null})
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ chat_response: null })
                     });
 
                     isBotTalking = false;
@@ -338,8 +363,8 @@
         }
 
         sendBtn.addEventListener('click', sendMessage);
-        chatInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') sendMessage(); });
-        
+        chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
+
         document.getElementById('refresh-history').addEventListener('click', () => {
             loadHistory();
         });
@@ -358,4 +383,5 @@
         }, 3000);
     </script>
 </body>
+
 </html>

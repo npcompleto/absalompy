@@ -20,6 +20,7 @@ from langchain_ollama import ChatOllama
 from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
+from tools.memory import remember
 from tools.school_tool import add_school_event, list_school_events
 from tools.time_tool import get_next_week_start_date, set_alarm
 from tools.wiki_tool import wiki_list_entries, wiki_read, wiki_write, wiki_search, wiki_ingest_raw
@@ -96,7 +97,8 @@ tools = [
     wiki_read, 
     wiki_write, 
     wiki_search, 
-    wiki_ingest_raw
+    wiki_ingest_raw,
+    remember
 ]
 # Mappatura per l'esecuzione automatica dei tool basata sul nome
 tool_map = {tool.name: tool for tool in tools}
@@ -194,7 +196,7 @@ def get_persona():
     persona = ""
     try:
         # Carichiamo sia l'identità principale che quella del Bibliotecario/Wiki
-        for filename in ["Identity.md", "Librarian.md"]:
+        for filename in ["Identity.md", "Librarian.md", "Researcher.md"]:
             path = os.path.join("persona", filename)
             if os.path.exists(path):
                 with open(path, "r") as f:
@@ -229,6 +231,14 @@ def get_today_memory():
         print(f"Errore nel recupero della memoria: {e}")
     return ""
 
+def get_long_term_memory():
+    try:
+        with open("persona/memory/long_term_memory.txt", "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception as e:
+        print(f"Errore nel recupero della memoria: {e}")
+    return ""
+
 
 
 def bootstrap_model():
@@ -253,6 +263,10 @@ def ask_llm(user_input):
     if today_memory:
         system_prompt += "\n Oggi è il " + datetime.now().strftime("%Y-%m-%d") + " ed è " + datetime.now().strftime("%A") + ".\n"
         system_prompt += f"\nQui trovi la cronologia della conversazione di oggi per darti contesto:\n{today_memory}\n"
+    
+    long_term_memory = get_long_term_memory()
+    if long_term_memory:
+        system_prompt += f"\nQui trovi la memoria a lungo termine:\n{long_term_memory}\n"
     
     # Inizializzazione del modello LangChain corretto
     try:
