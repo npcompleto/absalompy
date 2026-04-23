@@ -16,3 +16,4 @@ pyTelegramBotAPI
 python-frontmatter
 pymupdf
 Pillow
+faster_whisper

@@ -9,7 +9,7 @@
     },
     "inference": {
         "noise_scale": 0.8,
-        "length_scale": 1,
+        "length_scale": 0.8,
         "noise_w": 0.8
     },
     "phoneme_type": "espeak",
@@ -482,12 +482,12 @@
     "num_speakers": 1,
     "speaker_id_map": {},
     "language": {
-      "code": "it_IT",
-      "family": "it",
-      "region": "IT",
-      "name_native": "Italiano",
-      "name_english": "Italian",
-      "country_english": "Italy"
+        "code": "it_IT",
+        "family": "it",
+        "region": "IT",
+        "name_native": "Italiano",
+        "name_english": "Italian",
+        "country_english": "Italy"
     },
     "piper_version": "1.0.0"
 }
