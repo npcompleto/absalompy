@@ -248,7 +248,9 @@ def start_assistant(debug=False, telegram=False):
     is_busy = face.get_robot_status().get("is_busy", False)
     is_awake = face.get_robot_status().get("is_awake", False)
     last_interaction_time = 0
-    
+
+    #start "firefox --kiosk http://localhost:5000"
+    subprocess.run(["firefox", "--kiosk", "http://localhost:5000"])
     try:
         while True:
             if is_awake and (time.time() - last_interaction_time > config.INACTIVITY_TIMEOUT) and not face.is_speaking():
@@ -260,6 +262,7 @@ def start_assistant(debug=False, telegram=False):
 
             if stt_manager.listen_for_wakeword():
                 # Riproduce il suono di conferma
+                last_interaction_time = time.time()
                 play_audio("sounds/bubblepop.mp3")
                 if not is_awake:
                     is_awake = True
