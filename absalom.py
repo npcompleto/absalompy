@@ -9,22 +9,14 @@ import queue
 import zipfile
 import urllib.request
 import random
-import sounddevice as sd
-from vosk import Model, KaldiRecognizer
-from faster_whisper import WhisperModel
+from stt_manager import STTManager
+from tts_manager import TTSManager
+
 import requests
-from piper.voice import PiperVoice
+
 import wave
 import subprocess
-from langchain_ollama import ChatOllama
-from langchain_anthropic import ChatAnthropic
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
-from tools.memory import remember
-from subagents.researcher import research
-from tools.school_tool import add_school_event, list_school_events
-from tools.time_tool import get_next_week_start_date, set_alarm
-from tools.wiki_tool import wiki_list_entries, wiki_read, wiki_write, wiki_search, wiki_ingest_raw
+
 from db import init_db
 from dotenv import load_dotenv
 from datetime import datetime
@@ -33,190 +25,41 @@ from telegram_manager import TelegramManager
 from face_client import FaceClient
 import constants
 import config
+import logging
+from workers.dreaming_worker import DreamingWorker
+from workers.remote_commands_worker import RemoteCommandsWorker
+from workers.alarm_worker import AlarmWorker
+from workers.ingest_worker import IngestWorker
+from utils import play_audio
+from agent import Agent
 
-# Inizializza Whisper (usiamo tiny per velocità, soprattutto su Raspberry Pi)
-print("--- Caricamento modello Whisper (tiny)... ---")
-whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8")
+logging.basicConfig(
+    level=logging.INFO,  # Mostra tutto (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("absalom.log"),  # Scrive su file
+        logging.StreamHandler(sys.stdout)    # Scrive anche su console
+    ]
+)
 
 
 
 
-
-q = queue.Queue()
 last_interaction_time = 0
 
 telegram_bot = None
 
 _piper_voice = None
 
-# Lista dei tool disponibili per LangChain
-tools = [
-    list_school_events, 
-    get_next_week_start_date, 
-    set_alarm,
-    wiki_list_entries, 
-    wiki_read, 
-    wiki_write, 
-    wiki_search, 
-    wiki_ingest_raw,
-    remember,
-    research
-]
-# Mappatura per l'esecuzione automatica dei tool basata sul nome
-tool_map = {tool.name: tool for tool in tools}
-
 # Inizializzazione Client Faccia
 face = FaceClient(config.BASE_URL)
 
-def download_model():
-    os.makedirs(os.path.dirname(config.VOSK_MODEL_PATH), exist_ok=True)
-    print(f"--- Modello non trovato. Download in corso da {config.VOSK_MODEL_URL} ---")
-    zip_path = config.VOSK_MODEL_NAME + ".zip"
-    urllib.request.urlretrieve(VOSK_MODEL_URL, zip_path)
-    print("Download completato. Estrazione...")
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall("models")
-    
-    os.remove(zip_path)
-    print("Modello pronto.\n")
-
-def get_piper_voice():
-    global _piper_voice
-    if _piper_voice is None:
-        if not os.path.exists(config.PIPER_MODEL_PATH) or not os.path.exists(config.PIPER_CONFIG_PATH):
-            print("--- Download modello Piper in corso... ---")
-            os.makedirs(config.PIPER_MODEL_DIR, exist_ok=True)
-            urllib.request.urlretrieve(config.PIPER_MODEL_URL, config.PIPER_MODEL_PATH)
-            urllib.request.urlretrieve(config.PIPER_CONFIG_URL, config.PIPER_CONFIG_PATH)
-            print("--- Modello Piper pronto. ---")
-        _piper_voice = PiperVoice.load(config.PIPER_MODEL_PATH, config_path=config.PIPER_CONFIG_PATH)
-    return _piper_voice
-
-def play_audio(filepath):
-    """Riproduce un file audio specificato. Ritorna il codice di uscita del processo."""
-    if os.path.exists(filepath):
-        try:
-            process = subprocess.run(["ffplay", "-nodisp", "-autoexit", filepath], 
-                           stderr=subprocess.DEVNULL, 
-                           stdout=subprocess.DEVNULL)
-            return process.returncode
-        except Exception as e:
-            print(f"Errore durante la riproduzione di {filepath}: {e}")
-            return -1
-    else:
-        print(f"File audio non trovato: {filepath}")
-        return -1
-
-def speak(text):
-    if not isinstance(text, str):
-        text = str(text)
-    
-    # Rimuove emoji e caratteri speciali
-    text = re.sub(r'[^\w\s\d.,!?;:()\'\"-/]', '', text)
-    
-    # Spezzetta il testo in periodi (usa lookbehind per non rimuovere il delimitatore o semplicemente splitta)
-    # Questa regex splitta dopo i caratteri di punteggiatura seguiti da spazio
-    sentences = [s.strip() for s in re.split(r'(?<=[!.;?])\s+', text) if s.strip()]
-    
-    if not sentences:
-        return
-
-    print(f"Absalom dice: '{text}' (in {len(sentences)} pezzi)")
-    voice = get_piper_voice()
-    filename = "speech_chunk.wav"
-    
-    face.set_speaking(True)
-    
-    try:
-        for i, sentence in enumerate(sentences):
-            print(f"Sintesi pezzo {i+1}/{len(sentences)}: '{sentence}'")
-            with wave.open(filename, "wb") as wav_file:
-                for j, chunk in enumerate(voice.synthesize(sentence)):
-                    if j == 0:
-                        wav_file.setnchannels(chunk.sample_channels)
-                        wav_file.setsampwidth(chunk.sample_width)
-                        wav_file.setframerate(chunk.sample_rate)
-                    wav_file.writeframes(chunk.audio_int16_bytes)
-            
-            # Riproduce il pezzo e controlla se è stato interrotto (pkill)
-            face.set_speaking(True)
-            return_code = play_audio(filename)
-            face.set_speaking(False)
-            
-            # Se il processo è stato ucciso (non-zero return code), interrompiamo la lettura dei pezzi successivi
-            if return_code != 0:
-                print(f"Riproduzione interrotta al pezzo {i+1} (RC: {return_code})")
-                break
-                
-    except Exception as e:
-        print(f"Errore durante la sintesi vocale: {e}")
-    finally:
-        face.set_speaking(False)
-
-def get_persona():
-    """Carica e concatena i file della personalità."""
-    persona = ""
-    try:
-        # Carichiamo sia l'identità principale che quella del Bibliotecario/Wiki
-        for filename in ["Identity.md", "Librarian.md"]:
-            path = os.path.join("persona", filename)
-            if os.path.exists(path):
-                with open(path, "r") as f:
-                    persona += f.read() + "\n\n"
-    except Exception as e:
-        print(f"Errore nel caricamento della persona: {e}")
-    return persona
-
-def save_to_memory(user_input, absalom_response):
-    """Salva l'interazione nella memoria persistente in formato yyyy-MM-DD.txt."""
-    try:
-        date_str = datetime.now().strftime("%Y-%m-%d")
-        folder = os.path.join("persona", "memory")
-        os.makedirs(folder, exist_ok=True)
-        filepath = os.path.join(folder, f"{date_str}.txt")
-        
-        with open(filepath, "a", encoding="utf-8") as f:
-            f.write(f"Utente: {user_input}\n")
-            f.write(f"Absalom: {absalom_response}\n\n")
-    except Exception as e:
-        print(f"Errore durante il salvataggio della memoria: {e}")
-
-def get_today_memory():
-    """Recupera la memoria della giornata corrente se esistente."""
-    try:
-        date_str = datetime.now().strftime("%Y-%m-%d")
-        filepath = os.path.join("persona", "memory", f"{date_str}.txt")
-        if os.path.exists(filepath):
-            with open(filepath, "r", encoding="utf-8") as f:
-                return f.read()
-    except Exception as e:
-        print(f"Errore nel recupero della memoria: {e}")
-    return ""
-
-def get_long_term_memory():
-    try:
-        with open("persona/memory/long_term_memory.txt", "r", encoding="utf-8") as f:
-            return f.read()
-    except Exception as e:
-        print(f"Errore nel recupero della memoria: {e}")
-    return ""
-
-
-
-def bootstrap_model():
-    print("--- Avvio bootstrap del modello, solo se locale... ---")
-    if config.LLM_PROVIDER == "ollama-local":
-        try:
-            # Prova a caricare il modello
-            llm = ChatOllama(model=config.OLLAMA_MODEL)
-            ai_msg = llm.invoke("Hello")
-            print("--- Modello locale caricato con successo. ---")
-        except Exception as e:
-            print(f"Errore durante il caricamento del modello locale: {e}")
-            print("Assicurati che Ollama sia in esecuzione e che il modello sia installato.")
-    
+agent = Agent()
 
 def ask_llm(user_input):
+    return agent.ask(user_input)
+
+def abk_llm(user_input):
     """Interfaccia l'assistente con l'LLM configurato, gestendo i tool e la personalità."""
     system_prompt = get_persona()
     
@@ -279,9 +122,9 @@ def ask_llm(user_input):
                 if selected_tool:
                     print(f"--- Eseguendo tool: {tool_name} ---")
                     if tool_name == "list_school_events":
-                        speak("Sto controllando sul registro elettronico.")
+                        TTSManager().speak("Sto controllando sul registro elettronico.")
                     else:
-                        speak(random.choice(constants.TOOL_PHRASES))
+                        TTSManager().speak(random.choice(constants.TOOL_PHRASES))
                         
                     try:
                         tool_output = selected_tool.invoke(tool_call["args"])
@@ -357,13 +200,19 @@ def ask_llm(user_input):
         return error_msg
 
 
+def bootstrap_model():
+    print("--- Avvio bootstrap del modello, solo se locale... ---")
+    if config.LLM_PROVIDER == "ollama-local":
+        try:
+            # Prova a caricare il modello
+            llm = ChatOllama(model=config.OLLAMA_MODEL)
+            ai_msg = llm.invoke("Hello")
+            print("--- Modello locale caricato con successo. ---")
+        except Exception as e:
+            print(f"Errore durante il caricamento del modello locale: {e}")
+            print("Assicurati che Ollama sia in esecuzione e che il modello sia installato.")
+    
 
-def callback(indata, frames, time, status):
-    """This is called (from a separate thread) for each audio block."""
-    if status:
-        print(status, file=sys.stderr)
-    if not face.get_robot_status().get("is_busy"):
-        q.put(bytes(indata))
 
 def start_assistant(debug=False, telegram=False):
     # Esegui il suono di avvio
@@ -372,6 +221,7 @@ def start_assistant(debug=False, telegram=False):
     #play_audio("sounds/startup.mp3")
     init_db()
     bootstrap_model()
+    tts_manager = TTSManager(face)
     
     if telegram:
         # Inizializza Telegram Bot
@@ -385,299 +235,40 @@ def start_assistant(debug=False, telegram=False):
             
         telegram_bot = TelegramManager(
             ask_callback=ask_llm_with_busy,
-            speak_callback=speak,
+            speak_callback=TTSManager().speak,
             set_mode_callback=face.set_mode,
             get_status_callback=face.get_robot_status
         )
         telegram_bot.start()
-
-    if not os.path.exists(config.VOSK_MODEL_PATH):
-        download_model()
     
-    # Initialize model
-    model = Model(config.VOSK_MODEL_PATH)
-    # Avviamo con un recognizer LIMITATO alle sole wakewords + [unk] per efficienza
-    grammar = json.dumps(config.WAKE_WORDS + ["[unk]"])
-    rec = KaldiRecognizer(model, config.VOSK_RATE, grammar)
+    stt_manager = STTManager()
 
-    print(f"\n>>> Absalom OS avviato. In ascolto per la parola chiave: '{config.WAKE_WORDS}'...")
+    logging.info(f"Absalom OS avviato.")
     face.set_loading(False)
     is_busy = face.get_robot_status().get("is_busy", False)
     is_awake = face.get_robot_status().get("is_awake", False)
     last_interaction_time = 0
     
     try:
-        with sd.RawInputStream(samplerate=config.SAMPLE_RATE, blocksize=16000, dtype='int16',
-                               channels=1, callback=callback, device=config.AUDIO_DEVICE_INDEX):
-            while True:
-                # Timer di inattività: se sveglio e timeout superato, vai in standby
-                if is_awake and (time.time() - last_interaction_time > config.INACTIVITY_TIMEOUT) and not face.is_speaking():
-                    print("\n[!] Timeout di inattività raggiunto. Standby...")
-                    phrase = random.choice(constants.SLEEP_PHRASES)
-                    speak(phrase)
-                    face.set_mode("asleep")
-                    is_awake = False
-                
-                try:
-                    data = q.get(timeout=5) # Timeout per permettere il controllo dell'inattività
-                    
-                    # Se la frequenza hardware è diversa da quella di Vosk (16000), ricampioniamo nel thread principale
-                    if config.SAMPLE_RATE != config.VOSK_RATE:
-                        audio_data = np.frombuffer(data, dtype=np.int16)
-                        num_samples = len(audio_data)
-                        new_num_samples = int(num_samples * config.VOSK_RATE / config.SAMPLE_RATE)
-                        resampled_audio = np.interp(
-                            np.linspace(0, num_samples, new_num_samples, endpoint=False),
-                            np.arange(num_samples),
-                            audio_data
-                        ).astype(np.int16)
-                        data = resampled_audio.tobytes()
-                        
-                except queue.Empty:
-                    continue
+        while True:
+            if is_awake and (time.time() - last_interaction_time > config.INACTIVITY_TIMEOUT) and not face.is_speaking():
+                logging.info("Timeout di inattività raggiunto. Standby...")
+                phrase = random.choice(constants.SLEEP_PHRASES)
+                TTSManager().speak(phrase)
+                face.set_mode("asleep")
+                is_awake = False
 
-                if rec.AcceptWaveform(data):
-                    result = json.loads(rec.Result())
-                    text = result.get("text", "").lower().strip()
-                    
-                    # Se non abbiamo sentito nulla, ignoriamo
-                    if not text:
-                        continue
-                        
-                    # Cerchiamo se una delle wakeword è stata rilevata da Vosk
-                    trigger_word = next((w for w in config.WAKE_WORDS if w in text), None)
-                    
-                    if trigger_word:
-                        print(f"\n[!] Wakeword '{trigger_word}' rilevata tramite Vosk!")
-                        
-                        # Riproduce il suono di conferma
-                        play_audio("sounds/bubblepop.mp3")
-                        
-                        if not is_awake:
-                            is_awake = True
-                            face.set_mode("awake")
-                        
-                        # Svuotiamo la coda per ignorare l'audio precedente (inclusa la wakeword e il bip)
-                        while not q.empty():
-                            try:
-                                q.get_nowait()
-                            except queue.Empty:
-                                break
-                                
-                        print(">>> In ascolto per 5 secondi con Whisper...")
-                        face.set_loading(True)
-                        
-                        whisper_buffer = []
-                        start_time = time.time()
-                        
-                        # Ascolto per 5 secondi esatti
-                        while time.time() - start_time < 5:
-                            try:
-                                # Timeout breve per controllare il ciclo del tempo
-                                d = q.get(timeout=0.5)
-                                if config.SAMPLE_RATE != config.VOSK_RATE:
-                                    audio_data = np.frombuffer(d, dtype=np.int16)
-                                    num_samples = len(audio_data)
-                                    new_num_samples = int(num_samples * config.VOSK_RATE / config.SAMPLE_RATE)
-                                    resampled_audio = np.interp(
-                                        np.linspace(0, num_samples, new_num_samples, endpoint=False),
-                                        np.arange(num_samples),
-                                        audio_data
-                                    ).astype(np.int16)
-                                    whisper_buffer.append(resampled_audio)
-                                else:
-                                    whisper_buffer.append(np.frombuffer(d, dtype=np.int16))
-                            except queue.Empty:
-                                continue
-                        
-                        if not whisper_buffer:
-                            face.set_loading(False)
-                            continue
-                        play_audio("sounds/bubblepop.mp3")    
-                        # Uniamo il buffer e convertiamo in float32 per Whisper
-                        full_audio = np.concatenate(whisper_buffer).astype(np.float32) / 32768.0
-                        
-                        # Trascrizione con Whisper
-                        print("--- Trascrizione in corso... ---")
-                        segments, info = whisper_model.transcribe(full_audio, language="it", beam_size=5)
-                        text = " ".join([s.text for s in segments]).strip().lower()
-                        
-                        face.set_loading(False)
-                        
-                        if not text:
-                            print("DEBUG: Whisper non ha rilevato testo.")
-                            continue
-                            
-                        print(f"DEBUG: Whisper ha trascritto -> '{text}'")
-                        
-                        last_interaction_time = time.time()
-                        
-                        # Pulisce il testo dalle wakeword se presenti
-                        command = text
-                        for w in WAKE_WORDS:
-                            command = command.replace(w, "")
-                        command = re.sub(r'^[,.!?;:\s]+|[,.!?;:\s]+$', '', command).strip()
-                        
-                        if not command:
-                            print("DEBUG: Nessun comando dopo la wakeword.")
-                            continue
-                            
-                        # Procediamo con l'elaborazione del comando
-                        face.set_busy(True)
-                        try:
-                            response = ask_llm(command)
-                            face.send_chat_response(response)
-                            speak(response)
-                        finally:
-                            face.set_busy(False)
-                            # Resetta il recognizer per il prossimo ciclo
-                            rec.Reset()
-                            
-                        # Gestione speciale per comando di addormentamento se vogliamo forzarlo via codice
-                        if "addormentati" in command:
-                           face.set_mode("asleep")
-                           is_awake = False
-                        
-                        # Svuota la coda per evitare loop di feedback o audio accumulato
-                        while not q.empty():
-                            try: q.get_nowait()
-                            except queue.Empty: break
-                        face.set_busy(False)
-                        
-                    else:
-                        # Se siamo addormentati e non sentiamo la wakeword, ignoriamo il testo
-                        print(f"DEBUG: Testo ignorato (nessuna wakeword): '{text}'")
-                        pass
+            if stt_manager.listen_for_wakeword():
+                # Riproduce il suono di conferma
+                play_audio("sounds/bubblepop.mp3")
+                if not is_awake:
+                    is_awake = True
+                    face.set_mode("awake")
 
     except KeyboardInterrupt:
-        print("\nSpegni assistente...")
+        logging.info("Spegni assistente...")
     except Exception as e:
-        print(f"\nErrore durante l'esecuzione: {e}")
-
-def remote_commands_worker():
-    """Thread di background che interroga il server per comandi remoti (es. da Web UI)."""
-    print("--- Remote Commands Worker avviato ---")
-    while True:
-        try:
-            time.sleep(3) # Polling ogni 3 secondi
-            
-            # Se siamo già occupati, saltiamo il polling per questo ciclo
-            if face.get_robot_status().get("is_busy"):
-                continue
-                
-            state = face.get_full_status()
-            if state:
-                # Sincronizza lo stato locale con quello del server
-                face.set_busy(state.get("busy", False))
-                is_awake = (state.get("mode") == "awake")
-                
-                # Controllo Trigger Wiki Ingest
-                if state.get("ingest_requested"):
-                    print("[!] Ricevuto segnale di ingestione Wiki da Web UI.")
-                    
-                    face.set_busy(True)
-                    
-                    try:
-                        # Reset del trigger sul server prima di iniziare
-                        face.reset_ingest_trigger()
-                        
-                        # Feedback vocale come richiesto
-                        speak("Ho ricevuto i documenti. Passo subito i documenti al Bibliotecario per l'archiviazione.")
-                        
-                        # Trigger dell'ingestione tramite LLM con categoria se presente
-                        category = state.get("ingest_category")
-                        prompt = "Bibliotecario, ingerisci i file presenti nella cartella raw nella Wiki e sintetizzali."
-                        if category:
-                            prompt += f" La categoria specifica in cui salvare queste informazioni è: {category}."
-                            
-                        ingest_response = ask_llm(prompt)
-                        speak(ingest_response)
-                    finally:
-                        face.set_busy(False)
-                
-                # Controllo Messaggi Chat da Web
-                if state.get("pending_chat_msg"):
-                    chat_msg = state.get("pending_chat_msg")
-                    print(f"[!] Ricevuto messaggio chat da Web: '{chat_msg}'")
-                    
-                    face.set_busy(True)
-                    
-                    try:
-                        # Reset del messaggio pendente sul server
-                        face.reset_pending_chat()
-                        
-                        # Elaborazione tramite LLM
-                        response = ask_llm(chat_msg)
-                        
-                        # Salvataggio risposta per la Web UI e speak
-                        face.send_chat_response(response)
-                        speak(response)
-                    finally:
-                        face.set_busy(False)
-        except Exception as e:
-            # Silenzioso per non sporcare i log se il server è momentaneamente giù
-            pass
-
-def alarm_worker():
-    """Background worker che controlla gli allarmi impostati."""
-    print("--- Alarm Worker avviato ---")
-    alarms_path = "persona/alarms.json"
-    
-    last_checked_minute = ""
-    
-    while True:
-        try:
-            now = datetime.now()
-            current_time = now.strftime("%H:%M")
-            
-            # Controlla solo una volta al minuto
-            if current_time != last_checked_minute:
-                last_checked_minute = current_time
-                
-                if os.path.exists(alarms_path):
-                    with open(alarms_path, "r", encoding="utf-8") as f:
-                        alarms = json.load(f)
-                    
-                    updated = False
-                    for alarm in alarms:
-                        if alarm.get("active") and alarm.get("time") == current_time:
-                            print(f"[!] SVEGLIA! Orario raggiunto: {current_time}")
-                            
-                            # Sveglia Absalom
-                            face.set_mode("awake")
-                            
-                            # Messaggio personalizzato o generico
-                            msg = alarm.get("message")
-                            
-                            if not msg:
-                                msg = "Genera un bel messaggio motivaziona per svegliarmi"
-                            msg = ask_llm("L'utente ha chiesto di essere avvisato:"+msg)
-                            # Esegui la sveglia in modo che possa parlare
-                            speak(msg)
-                            
-                            # Disattiva l'allarme
-                            alarm["active"] = False
-                            updated = True
-                    
-                    if updated:
-                        with open(alarms_path, "w", encoding="utf-8") as f:
-                            json.dump(alarms, f, indent=4)
-                            
-        except Exception as e:
-            print(f"Errore nell'alarm_worker: {e}")
-        
-        time.sleep(30) # Controlla ogni 30 secondi
-
-def dreaming_worker():
-    """Processo di background che 'sogna' quando il robot dorme."""
-    print("--- Dreaming Worker avviato ---")
-    while True:
-        try:
-            if not face.is_awake() and not face.is_loading():
-                print("sto sognando")
-        except Exception:
-            pass
-        time.sleep(120) # Aspetta 2 minuti (120 secondi)
+        logging.error(f"Errore durante l'esecuzione: {e}")
 
 if __name__ == "__main__":
     # Creazione delle cartelle se mancano
@@ -685,18 +276,24 @@ if __name__ == "__main__":
     os.makedirs("persona/wiki/raw", exist_ok=True)
     
     # Avvio thread comandi remoti
-    threading.Thread(target=remote_commands_worker, daemon=True).start()
+    remote_commands_worker = RemoteCommandsWorker(face)
+    threading.Thread(target=remote_commands_worker.run, daemon=True).start()
     
     # Avvio thread allarmi
-    threading.Thread(target=alarm_worker, daemon=True).start()
+    alarm_worker = AlarmWorker(face)
+    threading.Thread(target=alarm_worker.run, daemon=True).start()
     
     # Avvio thread sogni
-    threading.Thread(target=dreaming_worker, daemon=True).start()
+    dreaming_worker = DreamingWorker(face)
+    threading.Thread(target=dreaming_worker.run, daemon=True).start()
+
+    # Avvio thread ingestione
+    ingest_worker = IngestWorker(face)
+    threading.Thread(target=ingest_worker.run, daemon=True).start()
     
     parser = argparse.ArgumentParser(description="Absalom OS Assistant")
     parser.add_argument("--debug", action="store_true", help="Avvia in modalità debug (input da tastiera)")
     parser.add_argument("--telegram", action="store_true", help="Avvia in modalità telegram")
     args = parser.parse_args()
-    print(args)
     
     start_assistant(debug=args.debug, telegram=args.telegram)

@@ -250,7 +250,7 @@ def wiki_upload():
     
     for file in files:
         if file.filename:
-            filepath = os.path.join(raw_dir, file.filename)
+            filepath = os.path.join(raw_dir, category + "_" + file.filename)
             file.save(filepath)
             uploaded_files.append(file.filename)
     

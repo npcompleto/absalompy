@@ -6,6 +6,7 @@ from playwright.sync_api import sync_playwright, expect
 import os
 import re
 from dotenv import load_dotenv
+import logging
 
 load_dotenv()
 
@@ -40,7 +41,7 @@ def extract_week_data(page):
     # Iterazione sulle righe della tabella
     trs = table.locator("tr")
     rows_count = trs.count()
-    print(f"Righe totali nella tabella: {rows_count}")
+    logging.info(f"Righe totali nella tabella: {rows_count}")
             
     for i in range(rows_count):
         row = trs.nth(i)
@@ -82,6 +83,7 @@ def extract_week_data(page):
 
 def axios_sync(weeks_ahead: int = 3):
     """ aggiorna i compiti e le verifiche dal registro Axios per il numero di settimane specificato , se non viene specificato il numero di settimane viene aggiornato per 3 settimane in avanti"""
+    logging.info("Avvio sincronizzazione Axios...")
     customer_id = os.getenv("AXIOS_CUSTOMER_ID")
     username = os.getenv("AXIOS_USERNAME")
     password = os.getenv("AXIOS_PASSWORD")
@@ -159,6 +161,7 @@ def list_school_events(start_date: str = None, end_date: str = None):
     - start_date: opzionale, data di inizio o data singola (es. '19/04/2026').
     - end_date: opzionale, data di fine intervallo (es. '25/04/2026').
     """
+    logging.info("Controllo la lista eventi su axios")
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -192,7 +195,7 @@ def list_school_events(start_date: str = None, end_date: str = None):
                 pass # Formato non valido, ignoriamo sync
         
         if should_sync:
-            print(f"Sincronizzazione necessaria (Target: {target_date_str}, Max DB: {max_date_db.strftime('%d/%m/%Y') if max_date_db else 'Nessuna'})...")
+            logging.info(f"Sincronizzazione necessaria (Target: {target_date_str}, Max DB: {max_date_db.strftime('%d/%m/%Y') if max_date_db else 'Nessuna'})...")
             axios_sync()
         
         # Rieseguiamo la query per includere i nuovi dati

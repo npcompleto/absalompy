@@ -7,6 +7,7 @@ import json
 from PIL import Image
 from langchain_core.tools import tool
 from datetime import datetime
+import logging
 
 WIKI_DIR = "persona/wiki"
 ENTRIES_DIR = os.path.join(WIKI_DIR, "entries")
@@ -20,8 +21,9 @@ def ensure_dirs():
         with open(INDEX_PATH, "w") as f:
             f.write("# LLM Wiki Index\n\nBenvenuto nell'archivio di conoscenza di Absalom.\n\n## Voci\n")
 
-def _optimize_image(img_bytes, max_size=2000):
+def _optimize_image(img_bytes, max_size=1500):
     """Ridimensiona e ottimizza l'immagine prima di inviarla all'LLM."""
+    logging.info(f"Ottimizzazione immagine: {img_bytes}")
     try:
         img = Image.open(io.BytesIO(img_bytes))
         # Converte in RGB per compatibilità JPEG
@@ -32,7 +34,7 @@ def _optimize_image(img_bytes, max_size=2000):
             img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
         
         buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=85)
+        img.save(buf, format="JPEG", quality=80)
         return buf.getvalue()
     except Exception as e:
         print(f"Errore ottimizzazione immagine: {e}")
@@ -45,8 +47,10 @@ def wiki_ingest_raw():
     I PDF vengono convertiti in immagini. Le immagini vengono ottimizzate.
     Tutti i file vengono eliminati dopo la lettura.
     """
+    logging.info("Ingerisco i file presenti nella cartella 'raw' della Wiki.")
     ensure_dirs()
     files = [f for f in os.listdir(RAW_DIR) if not f.startswith(".")]
+    logging.info(f"Trovati {len(files)} file da ingerire.")
     if not files:
         return "La cartella 'raw' è vuota. Nessun file da ingerire."
     
@@ -67,6 +71,7 @@ def wiki_ingest_raw():
         
         try:
             if ext in [".txt", ".md", ".log"]:
+                logging.info(f"Elaborazione file di testo: {filename}")
                 with open(filepath, "r", encoding="utf-8") as f:
                     content = f.read()
                 final_result["text_blocks"].append({
@@ -76,6 +81,7 @@ def wiki_ingest_raw():
                 
             elif ext == ".pdf":
                 doc = fitz.open(filepath)
+                logging.info(f"Elaborazione PDF: {filename}")
                 # Limite di 5 pagine per file se ci sono più file, altrimenti 10
                 max_p = 5 if len(files) > 1 else 10
                 num_pages = min(len(doc), max_p)
@@ -92,6 +98,7 @@ def wiki_ingest_raw():
                 doc.close()
                 
             elif ext in [".jpg", ".jpeg", ".png"]:
+                logging.info(f"Elaborazione immagine: {filename}")
                 with open(filepath, "rb") as f:
                     img_data = f.read()
                 optimized_data = _optimize_image(img_data)

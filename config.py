@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 import os
-
+import sounddevice as sd
 load_dotenv()
 
 INACTIVITY_TIMEOUT = 120  # 120 secondi di inattività per lo standby
