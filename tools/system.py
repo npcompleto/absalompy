@@ -5,4 +5,4 @@ def shutdown():
     """
     Spegne il sistema. Usalo quando l'utente ti da la buonanotte o ti dice di spegnerti.
     """
-    os.system("shutdown now")
+    os.system("sudo shutdown now")
