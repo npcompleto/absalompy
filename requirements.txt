@@ -20,3 +20,4 @@ Pillow
 faster_whisper
 langchain_community
 ddgs
+deepagents

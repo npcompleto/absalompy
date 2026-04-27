@@ -13,7 +13,6 @@ from tools.memory import remember
 from subagents.researcher import research
 from subagents.librarian import librarian
 from tools.school_tool import add_school_event, list_school_events
-from tools.wiki_tool import wiki_ingest_raw
 from tools.time_tool import get_next_week_start_date, set_alarm
 from config import LLM_PROVIDER, MAIN_LLM_MODEL
 import logging
@@ -90,8 +89,7 @@ class Agent:
                 set_alarm,
                 librarian,
                 remember,
-                research,
-                wiki_ingest_raw
+                research
             ],
             middleware=[today_system_prompt]
         )

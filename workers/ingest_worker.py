@@ -11,9 +11,9 @@ class IngestWorker:
     def run(self):
         while True:
             # Check if there are at least a file in the raw folder
-            raw_files = os.listdir("persona/wiki/raw")
+            raw_files = os.listdir("persona/knowledge/raw_documents")
             if len(raw_files) > 0:
-                TTSManager().speak("Ho ricevuto dei documenti da archiviare.")
-                response = Agent().ask("Ingerisci i file presenti nella cartella raw nella Wiki e sintetizzali. La prima parte del nome del file rappresenta la categoria. Ad esempio geografia_ indica che il file ha categoria geografia.")
+                TTSManager().speak("Ho dei documenti da archiviare.")
+                response = Agent().ask("Aggiorna knowledge raw_documents")
                 TTSManager().speak(response)
             time.sleep(2) # Wait 1 second before checking again
