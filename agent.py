@@ -14,6 +14,7 @@ from subagents.researcher import research
 from subagents.librarian import librarian
 from tools.school_tool import add_school_event, list_school_events
 from tools.time_tool import get_next_week_start_date, set_alarm
+from tools.system import shutdown
 from config import LLM_PROVIDER, MAIN_LLM_MODEL
 import logging
 from datetime import datetime
@@ -89,7 +90,8 @@ class Agent:
                 set_alarm,
                 librarian,
                 remember,
-                research
+                research,
+                shutdown
             ],
             middleware=[today_system_prompt]
         )
