@@ -250,7 +250,7 @@ def start_assistant(debug=False, telegram=False):
     last_interaction_time = 0
 
     #start "firefox --kiosk http://localhost:5000"
-    subprocess.run(["DISPLAY=:0","firefox", "--kiosk", "http://localhost:5000"])
+    subprocess.run(["firefox", "--kiosk", "http://localhost:5000"])
     try:
         while True:
             if is_awake and (time.time() - last_interaction_time > config.INACTIVITY_TIMEOUT) and not face.is_speaking():
