@@ -224,6 +224,7 @@ def start_assistant(debug=False, telegram=False):
     tts_manager = TTSManager(face)
     
     if telegram:
+        logging.info("Avvio Telegram Bot")
         # Inizializza Telegram Bot
         global telegram_bot
         def ask_llm_with_busy(text):
@@ -240,6 +241,7 @@ def start_assistant(debug=False, telegram=False):
             get_status_callback=face.get_robot_status
         )
         telegram_bot.start()
+        logging.info("Telegram Bot avviato.")
     
     stt_manager = STTManager()
 

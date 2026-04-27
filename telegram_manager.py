@@ -3,6 +3,7 @@ import threading
 import os
 import time
 from dotenv import load_dotenv
+import logging
 
 class TelegramManager:
     def __init__(self, ask_callback, speak_callback, set_mode_callback, get_status_callback):
@@ -12,7 +13,7 @@ class TelegramManager:
         self.allowed_users = [u.strip() for u in self.allowed_users if u.strip()]
         
         if not self.token or self.token == "your_telegram_bot_token_here":
-            print("WARNING: Telegram Token non configurato nel file .env.")
+            logging.warning("WARNING: Telegram Token non configurato nel file .env.")
             self.bot = None
             return
 
@@ -57,7 +58,7 @@ class TelegramManager:
             if not self._is_authorized(message): return
             
             user_input = message.text
-            print(f"TELEGRAM: Ricevuto '{user_input}'")
+            logging.info(f"TELEGRAM: Ricevuto '{user_input}'")
             
             self.bot.send_chat_action(message.chat.id, 'typing')
             
@@ -78,19 +79,19 @@ class TelegramManager:
         user_id = str(message.from_user.id)
         if not self.allowed_users:
             # Se non configurato, permetti a tutti per ora ma avvisa
-            print(f"WARNING: Nessun ID autorizzato configurato. Permetto accesso a {user_id}")
+            logging.warning(f"WARNING: Nessun ID autorizzato configurato. Permetto accesso a {user_id}")
             return True
         if user_id in self.allowed_users:
             return True
         
-        print(f"DENIED: Utente {user_id} ({message.from_user.username}) ha provato ad accedere.")
+        logging.warning(f"DENIED: Utente {user_id} ({message.from_user.username}) ha provato ad accedere.")
         self.bot.reply_to(message, f"❌ Accesso negato.\nIl tuo ID è: `{user_id}`\nConfiguralo in .env per abilitare l'accesso.", parse_mode='Markdown')
         return False
 
     def start(self):
         if not self.bot:
             return
-        print("Avvio polling Telegram Bot...")
+        logging.info("Avvio polling Telegram Bot...")
         # Usiamo non-blocking per integrarlo nel main
         thread = threading.Thread(target=self.bot.infinity_polling, daemon=True)
         thread.start()

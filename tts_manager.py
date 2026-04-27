@@ -46,6 +46,7 @@ class TTSManager:
         
         # Pulizia testo
         text = re.sub(r'[^\w\s\d.,!?;:()\'\"-/]', '', text)
+        text = text.replace("**", "")
         sentences = [s.strip() for s in re.split(r'(?<=[!.;?])\s+', text) if s.strip()]
         
         if not sentences:

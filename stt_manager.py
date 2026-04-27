@@ -26,20 +26,24 @@ def download_model():
 
 class STTManager:
     def __init__(self):
-        logging.info("Caricamento modello Whisper (large-v3)...")
-        self.whisper_model = WhisperModel("large-v3", device="cpu", compute_type="int8")
-        if not os.path.exists(config.VOSK_MODEL_PATH):
-            download_model()
-        # Initialize model
-        model = Model(config.VOSK_MODEL_PATH)
-        grammar = json.dumps(config.WAKE_WORDS + ["[unk]"])
-        # Avviamo con un recognizer LIMITATO alle sole wakewords + [unk] per efficienza
-        self.vosk_recognizer = KaldiRecognizer(model, config.VOSK_RATE, grammar)
-        self.stream = sounddevice.RawInputStream(samplerate=config.SAMPLE_RATE, blocksize=16000, dtype='int16',
-                               channels=1, callback=self.callback, device=config.AUDIO_DEVICE_INDEX)
-        self.stream.start()
-        self.q = queue.Queue()
-        logging.info(f"Listening for wakeword: {config.WAKE_WORDS}")
+        try:
+            logging.info("Caricamento modello Whisper (large-v3)...")
+            self.whisper_model = WhisperModel("large-v3", device="cpu", compute_type="int8")
+            if not os.path.exists(config.VOSK_MODEL_PATH):
+                download_model()
+            # Initialize model
+            model = Model(config.VOSK_MODEL_PATH)
+            grammar = json.dumps(config.WAKE_WORDS + ["[unk]"])
+            # Avviamo con un recognizer LIMITATO alle sole wakewords + [unk] per efficienza
+            self.vosk_recognizer = KaldiRecognizer(model, config.VOSK_RATE, grammar)
+            self.stream = sounddevice.RawInputStream(samplerate=config.SAMPLE_RATE, blocksize=16000, dtype='int16',
+                                channels=1, callback=self.callback, device=config.AUDIO_DEVICE_INDEX)
+            self.stream.start()
+            self.q = queue.Queue()
+            logging.info(f"Listening for wakeword: {config.WAKE_WORDS}")
+        except Exception as e:
+            logging.error(f"Errore in STTManager: {e}")
+        
         
     def callback(self, indata, frames, time, status):
         """This is called (from a separate thread) for each audio block."""

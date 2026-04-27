@@ -18,6 +18,7 @@ from tools.system import shutdown
 from config import LLM_PROVIDER, MAIN_LLM_MODEL
 import logging
 from datetime import datetime
+from utils import write_today_memory
 
 
 def get_today_memory():
@@ -98,25 +99,12 @@ class Agent:
         self._initialized = True
     
     def ask(self, question):
+        write_today_memory("Utente: " + question)
         result = self.agent.invoke(
             {"messages": [{"role": "user", "content": question}]}
         )
-        return result["messages"][-1].content
-
-    
-
-    def save_to_memory(self, user_input, absalom_response):
-        """Salva l'interazione nella memoria persistente in formato yyyy-MM-DD.txt."""
-        try:
-            date_str = datetime.now().strftime("%Y-%m-%d")
-            folder = os.path.join("persona", "memory")
-            os.makedirs(folder, exist_ok=True)
-            filepath = os.path.join(folder, f"{date_str}.txt")
-            
-            with open(filepath, "a", encoding="utf-8") as f:
-                f.write(f"Utente: {user_input}\n")
-                f.write(f"Absalom: {absalom_response}\n\n")
-        except Exception as e:
-            logging.error(f"Errore durante il salvataggio della memoria: {e}")
+        response = result["messages"][-1].content
+        write_today_memory("Absalom: " + response)
+        return response
 
     
