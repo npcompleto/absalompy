@@ -12,7 +12,7 @@ from langchain.agents.middleware import dynamic_prompt, ModelRequest
 from tools.memory import remember
 from subagents.researcher import research
 from subagents.librarian import librarian
-from tools.school_tool import add_school_event, list_school_events
+from tools.school_tool import add_school_event, list_school_events, list_school_ranks
 from tools.time_tool import get_next_week_start_date, set_alarm
 from tools.system import shutdown
 from config import LLM_PROVIDER, MAIN_LLM_MODEL
@@ -92,7 +92,8 @@ class Agent:
                 librarian,
                 remember,
                 research,
-                shutdown
+                shutdown,
+                list_school_ranks
             ],
             middleware=[today_system_prompt]
         )

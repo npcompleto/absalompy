@@ -20,6 +20,20 @@ def init_db():
             UNIQUE(type, date, class)
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS school_ranks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data TEXT NOT NULL,
+            materia TEXT NOT NULL,
+            tipo TEXT,
+            valutazione TEXT NOT NULL,
+            obiettivi TEXT,
+            osservazioni TEXT,
+            docente TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(data, materia, tipo)
+        )
+    ''')
     conn.commit()
     conn.close()
     print(f"Database initialized at {DB_PATH}")

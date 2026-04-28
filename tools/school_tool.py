@@ -35,6 +35,21 @@ def add_school_event(event_type: str, date: str, school_class: str, description:
     except Exception as e:
         return f"Errore durante l'inserimento: {e}"
 
+def add_school_rank(data: str, materia: str, tipo: str, valutazione: str, obiettivi: str, osservazioni: str, docente: str):
+    """Aggiunge un nuovo voto al database."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT OR IGNORE INTO school_ranks (data, materia, tipo, valutazione, obiettivi, osservazioni, docente)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (data, materia, tipo, valutazione, obiettivi, osservazioni, docente))
+        conn.commit()
+        conn.close()
+        return f"Voto salvato per {materia}: {valutazione}."
+    except Exception as e:
+        return f"Errore durante l'inserimento del voto: {e}"
+
 def extract_week_data(page):
     page.wait_for_selector("#table-rcla", timeout=30000)
     table = page.locator("#table-rcla")
@@ -81,9 +96,9 @@ def extract_week_data(page):
                         print("verifica", data_val, materia, verifica)
                         add_school_event("verifica", data_val, materia, verifica)
 
-def axios_sync(weeks_ahead: int = 3):
-    """ aggiorna i compiti e le verifiche dal registro Axios per il numero di settimane specificato , se non viene specificato il numero di settimane viene aggiornato per 3 settimane in avanti"""
-    logging.info("Avvio sincronizzazione Axios...")
+def axios_login(p):
+    """ Effettua il login al registro Axios """
+    logging.info("Avvio login Axios...")
     customer_id = os.getenv("AXIOS_CUSTOMER_ID")
     username = os.getenv("AXIOS_USERNAME")
     password = os.getenv("AXIOS_PASSWORD")
@@ -94,60 +109,71 @@ def axios_sync(weeks_ahead: int = 3):
     url = "https://registrofamiglie.axioscloud.it/Pages/SD/SD_Login.aspx"
     
     try:
-        with sync_playwright() as p:
-            # Avvio browser - Headless True per l'esecuzione in background
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context()
-            page = context.new_page()
+        # Avvio browser - Headless True per l'esecuzione in background
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
+        page = context.new_page()
+        
+        logging.info(f"Navigazione su {url}...")
+        page.goto(url)
+        
+        # Inserimento credenziali basato sui nomi degli input forniti
+        logging.info("Inserimento credenziali...")
+        page.fill('input[name="customerid"]', customer_id)
+        page.fill('input[name="username"]', username)
+        page.fill('input[name="password"]', password)
+        
+        # Click sul pulsante di login
+        # L'utente specifica un pulsante di tipo submit con testo "Accedi con Axios "
+        print("Esecuzione login...")
+        # Usiamo un selettore che cerchi l'attribulo value o il testo
+        login_button = page.locator('input[type="submit"], button[type="submit"]').filter(has_text="Accedi con Axios")
+        if login_button.count() == 0:
+            # Tentativo alternativo basato sul valore dell'input
+            login_button = page.locator('input[value="Accedi con Axios "]')
+        
+        login_button.click()
+        
+        # Attesa del caricamento della timeline
+        logging.info("Accesso in corso... attesa del contenuto timeline...")
+        page.wait_for_selector("#content-timeline", timeout=30000)
+        
+        logging.info("Login completato con successo.")
+        return page, browser
+    except Exception as e:
+        logging.error(f"Si è verificato un errore durante il login su Axios: {str(e)}")
+        return None, None
             
-            print(f"Navigazione su {url}...")
-            page.goto(url)
-            
-            # Inserimento credenziali basato sui nomi degli input forniti
-            print("Inserimento credenziali...")
-            page.fill('input[name="customerid"]', customer_id)
-            page.fill('input[name="username"]', username)
-            page.fill('input[name="password"]', password)
-            
-            # Click sul pulsante di login
-            # L'utente specifica un pulsante di tipo submit con testo "Accedi con Axios "
-            print("Esecuzione login...")
-            # Usiamo un selettore che cerchi l'attribulo value o il testo
-            login_button = page.locator('input[type="submit"], button[type="submit"]').filter(has_text="Accedi con Axios")
-            if login_button.count() == 0:
-                # Tentativo alternativo basato sul valore dell'input
-                login_button = page.locator('input[value="Accedi con Axios "]')
-            
-            login_button.click()
-            
-            # Attesa del caricamento della timeline
-            print("Accesso in corso... attesa del contenuto timeline...")
-            page.wait_for_selector("#content-timeline", timeout=30000)
-            
-            print("Login completato con successo.")
 
-            registro_di_classe = page.locator('h4').filter(has_text="Registro di Classe")
-            registro_di_classe.click()
+def axios_sync(weeks_ahead: int = 3):
+    """ aggiorna i compiti e le verifiche dal registro Axios per il numero di settimane specificato , se non viene specificato il numero di settimane viene aggiornato per 3 settimane in avanti"""
+    logging.info("Avvio sincronizzazione Axios...")
+    try:
+        p = sync_playwright().start()
+        page, browser = axios_login(p)
+        if page is None:
+            return "Errore: Login Axios fallito."
+
+        registro_di_classe = page.locator('h4').filter(has_text="Registro di Classe")
+        registro_di_classe.click()
             
-            extract_week_data(page)
-            if weeks_ahead >= 1:
-                for i in range(weeks_ahead):
-                    prev_fdDataValue = page.locator("#fdData").input_value()
-                    settimana_successiva = page.locator('button[title="Settimana successiva"]')
-                    settimana_successiva.click()
-                    page.wait_for_timeout(1000)
-                    #get input element value with id fdData
-                    fdData = page.locator("#fdData")
-                    expect(fdData).not_to_have_value(prev_fdDataValue)
-                    extract_week_data(page)
-                                
-            
-                
-            browser.close()
-            return f"Sincronizzazione completata."
-            
+        extract_week_data(page)
+        if weeks_ahead >= 1:
+            for i in range(weeks_ahead):
+                prev_fdDataValue = page.locator("#fdData").input_value()
+                settimana_successiva = page.locator('button[title="Settimana successiva"]')
+                settimana_successiva.click()
+                page.wait_for_timeout(1000)
+                #get input element value with id fdData
+                fdData = page.locator("#fdData")
+                expect(fdData).not_to_have_value(prev_fdDataValue)
+                extract_week_data(page)
+        browser.close()
+        return f"Sincronizzazione completata."     
     except Exception as e:
         return f"Si è verificato un errore durante la sincronizzazione con Axios: {str(e)}"
+    finally:
+        p.stop()
 
 @tool
 def list_school_events(start_date: str = None, end_date: str = None):
@@ -231,3 +257,80 @@ def list_school_events(start_date: str = None, end_date: str = None):
         return "\n".join(results)
     except Exception as e:
         return f"Errore durante la lettura: {e}"
+
+@tool
+def list_school_ranks():
+    """Elenca i voti salvati"""
+    try:
+        axios_rank_sync()
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT data, materia, tipo, valutazione, obiettivi, osservazioni, docente FROM school_ranks ORDER BY data DESC')
+        rows = cursor.fetchall()
+        conn.close()
+        if not rows:
+            return "Non ho trovato nulla."
+        results = []
+        for row in rows:
+            results.append(f"[{row[0].upper()}] {row[2]} ({row[1]}): {row[3]}")
+        return "\n".join(results)
+    except Exception as e:
+        return f"Errore durante la lettura: {e}"
+    
+
+def axios_rank_sync():
+    """aggiorna i voti dal registro Axios """
+    logging.info("Avvio sincronizzazione voti Axios...")
+    p = sync_playwright().start()
+    page, browser = axios_login(p)
+    registro_di_classe = page.locator('h4').filter(has_text="Voti")
+    registro_di_classe.click()
+    page.wait_for_selector("#s2id_fiFrazId", timeout=30000)
+   
+    def extract_ranks():
+        tableVotiLengthSelect = page.locator("select[name='table-voti_length']")
+        tableVotiLengthSelect.click()
+        tableVotiLengthSelect.select_option("Tutti")
+        print(tableVotiLengthSelect.locator("option").count())
+        tableVotiLengthSelect.dispatch_event("change")
+        print(tableVotiLengthSelect.input_value())
+        page.wait_for_timeout(2000)
+        rows = page.locator("#table-voti tbody tr")
+        count = rows.count()
+        print(f"Trovate {count} valutazioni.")
+
+        for i in range(count):
+            row = rows.nth(i)
+            # Recuperiamo tutte le celle (td) della riga corrente
+            cells = row.locator("td")
+            
+            # Estraiamo i testi in base all'ordine delle colonne
+            data        = cells.nth(0).inner_text()
+            materia     = cells.nth(1).inner_text()
+            tipo        = cells.nth(2).inner_text()
+            valutazione = cells.nth(3).inner_text()
+            obiettivi   = cells.nth(4).inner_text()
+            osservazioni = cells.nth(5).inner_text()
+            docente     = cells.nth(6).inner_text()
+
+            logging.info(f"Data: {data} | Materia: {materia} | Voto: {valutazione}")
+            add_school_rank(data, materia, tipo, valutazione, obiettivi, osservazioni, docente)
+    page.locator("#s2id_fiFrazId").click()
+    frazioneTemporaleElements = page.locator("#select2-results-2 li")
+    logging.info(frazioneTemporaleElements.nth(0).inner_text())
+    frazioneTemporaleElements.nth(0).click()
+    extract_ranks()
+    page.locator("#s2id_fiFrazId").click()
+    frazioneTemporaleElements = page.locator("#select2-results-6 li")
+    logging.info(frazioneTemporaleElements.count())
+    logging.info(frazioneTemporaleElements.nth(1).inner_text())
+    frazioneTemporaleElements.nth(1).click()
+    extract_ranks()
+    
+    browser.close()
+    p.stop()
+
+if __name__ == "__main__":
+    axios_rank_sync()
+    
+    
