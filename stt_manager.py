@@ -33,7 +33,7 @@ class STTManager:
                 download_model()
             # Initialize model
             model = Model(config.VOSK_MODEL_PATH)
-            grammar = json.dumps(config.WAKE_WORDS + ["[unk]"])
+            grammar = json.dumps(config.WAKE_WORDS + ["ehm", "uhm", "ah", "eh", "si", "no", "che", "ma", "[unk]", "salmo","asilo"])
             # Avviamo con un recognizer LIMITATO alle sole wakewords + [unk] per efficienza
             self.vosk_recognizer = KaldiRecognizer(model, config.VOSK_RATE, grammar)
             self.stream = sounddevice.RawInputStream(samplerate=config.SAMPLE_RATE, blocksize=16000, dtype='int16',

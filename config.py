@@ -32,7 +32,7 @@ BASE_URL = "http://127.0.0.1:5000"
 VOSK_MODEL_NAME = "vosk-model-small-it-0.22"
 VOSK_MODEL_PATH = os.path.join("models", VOSK_MODEL_NAME)
 VOSK_MODEL_URL = f"https://alphacephei.com/vosk/models/{VOSK_MODEL_NAME}.zip"
-WAKE_WORDS = ["absalom", "[unk]"]
+WAKE_WORDS = ["absalom"]
 
 VOSK_RATE = 16000
 
