@@ -42,6 +42,8 @@ echo "--- Avvio Robot Face Server... ---"
 python face_server.py > /dev/null 2>&1 &
 FACE_PID=$!
 
+export DISPLAY=:0
+
 echo "--- Avvio Absalom Assistant... ---"
 python absalom.py $1 $2 $3 $4
 ABSALOM_PID=$!
