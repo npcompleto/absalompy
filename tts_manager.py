@@ -28,9 +28,9 @@ class TTSManager:
         self._initialized = True
         self.recurrent_audio = {
             "dimmi": "sounds/dimmi.wav",
-            "certo": "sounds/certo.wav",
             "un momento": "sounds/unmomento.wav",
-            "ecco": "sounds/ecco.wav"
+            "ecco": "sounds/ecco.wav",
+            "ricevuto": "sounds/ricevuto.wav"
         }
 
         #persist recurrent audio files

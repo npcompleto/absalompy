@@ -132,15 +132,13 @@ def start_assistant(debug=False, telegram=False):
                 play_audio(TTSManager().recurrent_audio.get("dimmi"))
                 face.set_speaking(False)
                 face.set_loading(True)
-                question = stt_manager.listen_for_question(duration=5)
-                
-                print(f"Domanda: {question}")
+                question = stt_manager.listen_for_question_realtime()
+                face.set_loading(False)
+                play_audio(TTSManager().recurrent_audio.get("ricevuto"))
+                logging.info(f">>> Domanda: {question}")
                 if question != "":
                     answer = agent.ask(question)
-                    face.set_loading(False)
                     TTSManager().speak(answer)
-                else:
-                    face.set_loading(False)
 
     except KeyboardInterrupt:
         logging.info("Spegni assistente...")
@@ -150,7 +148,6 @@ def start_assistant(debug=False, telegram=False):
 if __name__ == "__main__":
     # Creazione delle cartelle se mancano
     os.makedirs("persona/memory", exist_ok=True)
-    os.makedirs("persona/wiki/raw", exist_ok=True)
     
     # Avvio thread comandi remoti
     remote_commands_worker = RemoteCommandsWorker(face)

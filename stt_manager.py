@@ -33,10 +33,10 @@ class STTManager:
             if not os.path.exists(config.VOSK_MODEL_PATH):
                 download_model()
             # Initialize model
-            model = Model(config.VOSK_MODEL_PATH)
+            self.vosk_model = Model(config.VOSK_MODEL_PATH)
             grammar = json.dumps(config.WAKE_WORDS + ["ehm", "uhm", "ah", "eh", "si", "no", "che", "ma", "[unk]", "salmo","asilo"])
             # Avviamo con un recognizer LIMITATO alle sole wakewords + [unk] per efficienza
-            self.vosk_recognizer = KaldiRecognizer(model, config.VOSK_RATE, grammar)
+            self.vosk_recognizer = KaldiRecognizer(self.vosk_model, config.VOSK_RATE, grammar)
             self.stream = sounddevice.RawInputStream(samplerate=config.SAMPLE_RATE, blocksize=16000, dtype='int16',
                                 channels=1, callback=self.callback, device=config.AUDIO_DEVICE_INDEX)
             self.stream.start()
@@ -141,9 +141,84 @@ class STTManager:
         
         return text
         
+    def listen_for_question_realtime(self, silence_timeout: float = 2.0, max_duration: int = 15) -> str:
+        print(">>> In ascolto della domanda...")
+        
+        # Usa un recognizer Vosk completo per la trascrizione in tempo reale e il rilevamento del silenzio
+        full_rec = KaldiRecognizer(self.vosk_model, config.VOSK_RATE)
+        
+        whisper_buffer = []
+        start_time = time.time()
+        last_speech_time = time.time()
+        is_speaking = False
+        
+        # Svuota la coda prima di iniziare ad ascoltare per evitare parole vecchie
+        while not self.q.empty():
+            try: self.q.get_nowait()
+            except queue.Empty: break
+            
+        while time.time() - start_time < max_duration:
+            try:
+                # Timeout breve per controllare il ciclo del tempo
+                data = self.q.get(timeout=0.1)
                 
-                
-                
+                if config.SAMPLE_RATE != config.VOSK_RATE:
+                    audio_data = np.frombuffer(data, dtype=np.int16)
+                    num_samples = len(audio_data)
+                    new_num_samples = int(num_samples * config.VOSK_RATE / config.SAMPLE_RATE)
+                    resampled_audio = np.interp(
+                        np.linspace(0, num_samples, new_num_samples, endpoint=False),
+                        np.arange(num_samples),
+                        audio_data
+                    ).astype(np.int16)
+                    vosk_data = resampled_audio.tobytes()
+                    whisper_buffer.append(resampled_audio)
+                else:
+                    vosk_data = data
+                    whisper_buffer.append(np.frombuffer(data, dtype=np.int16))
+
+                if full_rec.AcceptWaveform(vosk_data):
+                    result = json.loads(full_rec.Result())
+                    if result.get("text"):
+                        print(f"\rVosk: {result['text']}                    ")
+                        # Quando AcceptWaveform restituisce True, significa che ha rilevato una fine frase
+                        break
+                else:
+                    partial = json.loads(full_rec.PartialResult())
+                    if partial.get("partial"):
+                        if not is_speaking:
+                            is_speaking = True
+                        last_speech_time = time.time()
+                        print(f"\rVosk (parziale): {partial['partial']}          ", end='', flush=True)
+
+                # Se ha iniziato a parlare ma c'è stato troppo silenzio
+                if is_speaking and time.time() - last_speech_time > silence_timeout:
+                    print("\n[Silenzio rilevato, fine ascolto]")
+                    break
+
+            except queue.Empty:
+                if is_speaking and time.time() - last_speech_time > silence_timeout:
+                    print("\n[Silenzio rilevato, fine ascolto]")
+                    break
+                continue
+        
+        print() # a capo dopo i parziali
+        
+        if not whisper_buffer:
+            return ""
+
+        # Uniamo il buffer e convertiamo in float32 per Whisper
+        full_audio = np.concatenate(whisper_buffer).astype(np.float32) / 32768.0
+        
+        # Trascrizione finale con Whisper (migliore qualità)
+        print("--- Trascrizione finale con Whisper in corso... ---")
+        segments, info = self.whisper_model.transcribe(full_audio, language="it", beam_size=5)
+        text = " ".join([s.text for s in segments]).strip().lower()
+        
+        return text
+        
+        
+        
         """        
         print(">>> In ascolto per 5 secondi con Whisper...")
         face.set_loading(True)
