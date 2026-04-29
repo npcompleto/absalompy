@@ -131,6 +131,16 @@ def start_assistant(debug=False, telegram=False):
                 face.set_speaking(True)
                 play_audio(TTSManager().recurrent_audio.get("dimmi"))
                 face.set_speaking(False)
+                face.set_loading(True)
+                question = stt_manager.listen_for_question(duration=5)
+                
+                print(f"Domanda: {question}")
+                if question != "":
+                    answer = agent.ask(question)
+                    face.set_loading(False)
+                    TTSManager().speak(answer)
+                else:
+                    face.set_loading(False)
 
     except KeyboardInterrupt:
         logging.info("Spegni assistente...")
