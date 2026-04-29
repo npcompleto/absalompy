@@ -7,6 +7,7 @@ import os
 import re
 from dotenv import load_dotenv
 import logging
+from tts_manager import TTSManager
 
 load_dotenv()
 
@@ -35,15 +36,15 @@ def add_school_event(event_type: str, date: str, school_class: str, description:
     except Exception as e:
         return f"Errore durante l'inserimento: {e}"
 
-def add_school_rank(data: str, materia: str, tipo: str, valutazione: str, obiettivi: str, osservazioni: str, docente: str):
+def add_school_rank(data: str, materia: str, tipo: str, valutazione: str, obiettivi: str, osservazioni: str, docente: str, quadrimestre: str):
     """Aggiunge un nuovo voto al database."""
     try:
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT OR IGNORE INTO school_ranks (data, materia, tipo, valutazione, obiettivi, osservazioni, docente)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (data, materia, tipo, valutazione, obiettivi, osservazioni, docente))
+            INSERT OR IGNORE INTO school_ranks (data, materia, tipo, valutazione, obiettivi, osservazioni, docente, quadrimestre)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (data, materia, tipo, valutazione, obiettivi, osservazioni, docente, quadrimestre))
         conn.commit()
         conn.close()
         return f"Voto salvato per {materia}: {valutazione}."
@@ -99,6 +100,8 @@ def extract_week_data(page):
 def axios_login(p, headless=True):
     """ Effettua il login al registro Axios """
     logging.info("Avvio login Axios...")
+    tts = TTSManager()
+    tts.speak("Accedo al registro")
     customer_id = os.getenv("AXIOS_CUSTOMER_ID")
     username = os.getenv("AXIOS_USERNAME")
     password = os.getenv("AXIOS_PASSWORD")
@@ -188,6 +191,8 @@ def list_school_events(start_date: str = None, end_date: str = None):
     - end_date: opzionale, data di fine intervallo (es. '25/04/2026').
     """
     logging.info("Controllo la lista eventi su axios")
+    tts = TTSManager()
+    tts.speak("Controllo i compiti e le verifiche sul registro")
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -261,18 +266,22 @@ def list_school_events(start_date: str = None, end_date: str = None):
 @tool
 def list_school_ranks():
     """Elenca i voti salvati"""
+    
     try:
-        axios_rank_sync(headless=False)
+        axios_rank_sync(headless=True)
+        tts = TTSManager()
+        tts.speak("Controllo i voti sul registro")
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT data, materia, tipo, valutazione, obiettivi, osservazioni, docente FROM school_ranks ORDER BY data DESC')
+        cursor.execute('SELECT data, materia, tipo, valutazione, obiettivi, osservazioni, docente, quadrimestre FROM school_ranks ORDER BY data DESC')
         rows = cursor.fetchall()
         conn.close()
         if not rows:
             return "Non ho trovato nulla."
         results = []
         for row in rows:
-            results.append(f"[{row[0].upper()}] {row[2]} ({row[1]}): {row[3]}")
+            quad = f"[{row[7]}] " if row[7] else ""
+            results.append(f"{quad}[{row[0].upper()}] {row[2]} ({row[1]}): {row[3]}")
         return "\n".join(results)
     except Exception as e:
         return f"Errore durante la lettura: {e}"
@@ -286,8 +295,9 @@ def axios_rank_sync(headless: bool = True):
     registro_di_classe = page.locator('h4').filter(has_text="Voti")
     registro_di_classe.click()
     page.wait_for_selector("#s2id_fiFrazId", timeout=30000)
-   
-    def extract_ranks():
+    tts = TTSManager()
+    tts.speak(f"Leggo i voti")
+    def extract_ranks(quadrimestre: str):
         tableVotiLengthSelect = page.locator("select[name='table-voti_length']")
         tableVotiLengthSelect.click()
         tableVotiLengthSelect.select_option("Tutti")
@@ -298,7 +308,7 @@ def axios_rank_sync(headless: bool = True):
         rows = page.locator("#table-voti tbody tr")
         count = rows.count()
         logging.info(f"Trovate {count} valutazioni.")
-
+        
         for i in range(count):
             row = rows.nth(i)
             # Recuperiamo tutte le celle (td) della riga corrente
@@ -313,19 +323,21 @@ def axios_rank_sync(headless: bool = True):
             osservazioni = cells.nth(5).inner_text()
             docente     = cells.nth(6).inner_text()
 
-            logging.info(f"Data: {data} | Materia: {materia} | Voto: {valutazione}")
-            add_school_rank(data, materia, tipo, valutazione, obiettivi, osservazioni, docente)
+            logging.info(f"Data: {data} | Materia: {materia} | Voto: {valutazione} | Quad: {quadrimestre}")
+            add_school_rank(data, materia, tipo, valutazione, obiettivi, osservazioni, docente, quadrimestre)
     page.locator("#s2id_fiFrazId").click()
     frazioneTemporaleElements = page.locator("#select2-results-2 li")
-    logging.info(frazioneTemporaleElements.nth(0).inner_text())
+    quad1 = frazioneTemporaleElements.nth(0).inner_text().split(" (")[0]
+    logging.info(quad1)
     frazioneTemporaleElements.nth(0).click()
-    extract_ranks()
+    extract_ranks(quad1)
     page.locator("#s2id_fiFrazId").click()
     frazioneTemporaleElements = page.locator("#select2-results-6 li")
     logging.info(frazioneTemporaleElements.count())
-    logging.info(frazioneTemporaleElements.nth(1).inner_text())
+    quad2 = frazioneTemporaleElements.nth(1).inner_text().split(" (")[0]
+    logging.info(quad2)
     frazioneTemporaleElements.nth(1).click()
-    extract_ranks()
+    extract_ranks(quad2)
     
     browser.close()
     p.stop()
