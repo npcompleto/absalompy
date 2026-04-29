@@ -20,8 +20,8 @@ elif LLM_PROVIDER == "google":
     MAIN_LLM_MODEL = GOOGLE_MODEL
 
 PIPER_MODEL_DIR = "models/piper"
-#PIPER_MODEL_NAME = "it_IT-paola-medium.onnx"
-PIPER_MODEL_NAME = "it_IT_RON.onnx"
+PIPER_MODEL_NAME = "it_IT-paola-medium.onnx"
+#PIPER_MODEL_NAME = "it_IT_RON.onnx"
 PIPER_MODEL_PATH = os.path.join(PIPER_MODEL_DIR, PIPER_MODEL_NAME)
 PIPER_CONFIG_PATH = PIPER_MODEL_PATH + ".json"
 PIPER_MODEL_URL = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/it/it_IT/paola/medium/{PIPER_MODEL_NAME}?download=true"
@@ -32,7 +32,7 @@ BASE_URL = "http://127.0.0.1:5000"
 VOSK_MODEL_NAME = "vosk-model-small-it-0.22"
 VOSK_MODEL_PATH = os.path.join("models", VOSK_MODEL_NAME)
 VOSK_MODEL_URL = f"https://alphacephei.com/vosk/models/{VOSK_MODEL_NAME}.zip"
-WAKE_WORDS = ["absalom","absalon","assalom","assalon","okron","ok ron", "ok on","ciaoron","ciao ron","sauron", "ciao", "ciao rom"]
+WAKE_WORDS = ["absalom", "[unk]"]
 
 VOSK_RATE = 16000
 

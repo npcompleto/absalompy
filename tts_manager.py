@@ -23,24 +23,32 @@ class TTSManager:
         if self._initialized:
             return
             
-        self._piper_voice = None
+        self._piper_voice = self.get_piper_voice()
         self.face = face
         self._initialized = True
+        self.recurrent_audio = {
+            "dimmi": "sounds/dimmi.wav",
+            "certo": "sounds/certo.wav",
+            "un momento": "sounds/unmomento.wav",
+            "ecco": "sounds/ecco.wav"
+        }
+
+        #persist recurrent audio files
+        for text, filename in self.recurrent_audio.items():
+            self.speak(text, filename, play=False)
 
     def get_piper_voice(self):
-        if self._piper_voice is None:
-            if not os.path.exists(config.PIPER_MODEL_PATH) or not os.path.exists(config.PIPER_CONFIG_PATH):
-                logging.info("Download modello Piper in corso...")
-                os.makedirs(os.path.dirname(config.PIPER_MODEL_PATH), exist_ok=True)
-                urllib.request.urlretrieve(config.PIPER_MODEL_URL, config.PIPER_MODEL_PATH)
-                urllib.request.urlretrieve(config.PIPER_CONFIG_URL, config.PIPER_CONFIG_PATH)
-                logging.info("Modello Piper pronto.")
-            
-            # Caricamento del modello
-            self._piper_voice = PiperVoice.load(config.PIPER_MODEL_PATH, config_path=config.PIPER_CONFIG_PATH)
-        return self._piper_voice
+        if not os.path.exists(config.PIPER_MODEL_PATH) or not os.path.exists(config.PIPER_CONFIG_PATH):
+            logging.info("Download modello Piper in corso...")
+            os.makedirs(os.path.dirname(config.PIPER_MODEL_PATH), exist_ok=True)
+            urllib.request.urlretrieve(config.PIPER_MODEL_URL, config.PIPER_MODEL_PATH)
+            urllib.request.urlretrieve(config.PIPER_CONFIG_URL, config.PIPER_CONFIG_PATH)
+            logging.info("Modello Piper pronto.")
+        
+        # Caricamento del modello
+        return PiperVoice.load(config.PIPER_MODEL_PATH, config_path=config.PIPER_CONFIG_PATH)
 
-    def speak(self, text):
+    def speak(self, text, filename="speech_chunk.wav", play=True):
         if not isinstance(text, str):
             text = str(text)
         
@@ -53,8 +61,7 @@ class TTSManager:
             return
 
         logging.info(f"Absalom dice: '{text}' (in {len(sentences)} pezzi)")
-        voice = self.get_piper_voice() # Corretto riferimento a self
-        filename = "speech_chunk.wav"
+        
         
         if self.face:
             self.face.set_speaking(True)
@@ -63,8 +70,8 @@ class TTSManager:
             for i, sentence in enumerate(sentences):
                 logging.info(f"Sintesi pezzo {i+1}/{len(sentences)}: '{sentence}'")
                 with wave.open(filename, "wb") as wav_file:
-                    # voice.synthesize restituisce un generatore di chunk audio
-                    for j, audio_chunk in enumerate(voice.synthesize(sentence)):
+                    # self._piper_voice.synthesize restituisce un generatore di chunk audio
+                    for j, audio_chunk in enumerate(self._piper_voice.synthesize(sentence)):
                         if j == 0:
                             wav_file.setnchannels(audio_chunk.sample_channels)
                             wav_file.setsampwidth(audio_chunk.sample_width)
@@ -73,11 +80,11 @@ class TTSManager:
                         wav_file.writeframes(audio_chunk.audio_int16_bytes)
                 
                 # Riproduce il pezzo (presume che play_audio sia definita globalmente)
-                return_code = play_audio(filename) 
-                
-                if return_code != 0:
-                    logging.info(f"Riproduzione interrotta (RC: {return_code})")
-                    break
+                if play:
+                    return_code = play_audio(filename) 
+                    if return_code != 0:
+                        logging.info(f"Riproduzione interrotta (RC: {return_code})")
+                        break
                     
         except Exception as e:
             logging.error(f"Errore durante la sintesi vocale: {e}")

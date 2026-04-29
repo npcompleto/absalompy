@@ -59,147 +59,6 @@ agent = Agent()
 def ask_llm(user_input):
     return agent.ask(user_input)
 
-def abk_llm(user_input):
-    """Interfaccia l'assistente con l'LLM configurato, gestendo i tool e la personalità."""
-    system_prompt = get_persona()
-    
-    # Aggiunge la memoria odierna al prompt di sistema come contesto
-    today_memory = get_today_memory()
-    if today_memory:
-        system_prompt += "\n Oggi è il " + datetime.now().strftime("%Y-%m-%d") + " ed è " + datetime.now().strftime("%A") + ".\n"
-        system_prompt += f"\nQui trovi la cronologia della conversazione di oggi per darti contesto:\n{today_memory}\n"
-    
-    long_term_memory = get_long_term_memory()
-    if long_term_memory:
-        system_prompt += f"\nQui trovi la memoria a lungo termine:\n{long_term_memory}\n"
-    
-    # Inizializzazione del modello LangChain corretto
-    try:
-        if config.LLM_PROVIDER == "anthropic":
-            llm = ChatAnthropic(model=config.ANTHROPIC_MODEL)
-        elif config.LLM_PROVIDER == "google":
-            llm = ChatGoogleGenerativeAI(model=config.GOOGLE_MODEL, google_api_key=config.GOOGLE_API_KEY)
-        else:
-            llm = ChatOllama(model=config.OLLAMA_MODEL)
-        
-        # Binding dei tool alla catena
-        llm_with_tools = llm.bind_tools(tools)
-        
-        # Preparazione dei messaggi per la conversazione
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_input)
-        ]
-        
-        # Loop di iterazione per gestire eventuali tool requests
-        final_answer = ""
-        for step in range(5):  # Limite di sicurezza per evitare loop infiniti
-            print(f"--- Richiesta LLM (Passaggio {step + 1})... ---")
-            ai_msg = llm_with_tools.invoke(messages)
-            messages.append(ai_msg)
-            
-            # Se l'LLM ha risposto con del testo e NON ha tool call, abbiamo finito
-            if not ai_msg.tool_calls:
-                content = ai_msg.content
-                # Gestione dei contenuti che possono essere una lista di blocchi (comune in alcuni provider)
-                if isinstance(content, list):
-                    final_answer = " ".join([block.get("text", "") if isinstance(block, dict) else str(block) for block in content])
-                else:
-                    final_answer = str(content)
-                break
-                
-            # Se l'LLM ha richiesto l'uso di tool, eseguiamo i task
-            loop_count = 0
-            MAX_LOOP = 20
-            for tool_call in ai_msg.tool_calls:
-                loop_count += 1
-                if loop_count > MAX_LOOP:
-                    return "Sono andato in confusione. Riproviamo?"
-                tool_name = tool_call["name"].lower()
-                # Cerchiamo il tool per nome in modo case-insensitive
-                selected_tool = tool_map.get(tool_name)
-                
-                if selected_tool:
-                    print(f"--- Eseguendo tool: {tool_name} ---")
-                    if tool_name == "list_school_events":
-                        TTSManager().speak("Sto controllando sul registro elettronico.")
-                    else:
-                        TTSManager().speak(random.choice(constants.TOOL_PHRASES))
-                        
-                    try:
-                        tool_output = selected_tool.invoke(tool_call["args"])
-                        print(f"--- Risultato del tool: {tool_output} ---")
-                        
-                        # Gestione Multimodale: se il tool restituisce dati multimediali (es. wiki_ingest_raw)
-                        if isinstance(tool_output, str) and tool_output.startswith("__INGEST_DATA__:"):
-                            try:
-                                data_json = tool_output.split("__INGEST_DATA__:", 1)[1]
-                                data = json.loads(data_json)
-                                
-                                if data.get("type") == "media_list":
-                                    content_blocks = [{"type": "text", "text": data.get("text_info", "Dati estratti dai file:")}]
-                                    
-                                    # Aggiunta blocchi di testo
-                                    for t in data.get("text_blocks", []):
-                                        content_blocks.append({"type": "text", "text": f"\n\nCONTENUTO FILE {t['filename']}:\n{t['content']}"})
-                                    
-                                    # Aggiunta immagini
-                                    prov = LLM_PROVIDER.lower().strip()
-                                    for m in data["media"]:
-                                        if prov == "google":
-                                            content_blocks.append({
-                                                "type": "media",
-                                                "mime_type": "image/jpeg",
-                                                "data": m["data"]
-                                            })
-                                        elif prov == "anthropic":
-                                            content_blocks.append({
-                                                "type": "image",
-                                                "source": {
-                                                    "type": "base64",
-                                                    "media_type": "image/jpeg",
-                                                    "data": m["data"]
-                                                }
-                                            })
-                                        else:
-                                            # Fallback per altri provider multimodali (es standard LangChain)
-                                            content_blocks.append({
-                                                "type": "image_url",
-                                                "image_url": {"url": f"data:image/jpeg;base64,{m['data']}"}
-                                            })
-                                    messages.append(ToolMessage(content=content_blocks, tool_call_id=tool_call["id"]))
-                                else:
-                                    messages.append(ToolMessage(content=str(tool_output), tool_call_id=tool_call["id"]))
-                            except Exception as je:
-                                print(f"Errore parsing dati ingest: {je}")
-                                messages.append(ToolMessage(content=str(tool_output), tool_call_id=tool_call["id"]))
-                        else:
-                            messages.append(ToolMessage(content=str(tool_output), tool_call_id=tool_call["id"]))
-                    except Exception as te:
-                        error_text = f"Errore nell'esecuzione del tool {tool_name}: {te}"
-                        print(error_text)
-                        messages.append(ToolMessage(content=error_text, tool_call_id=tool_call["id"]))
-                else:
-                    error_text = f"Tool '{tool_name}' richiesto ma non trovato."
-                    print(error_text)
-                    messages.append(ToolMessage(content=error_text, tool_call_id=tool_call["id"]))
-        
-        # Sintesi vocale, salvataggio memoria e log della risposta finale
-        if final_answer:
-            save_to_memory(user_input, final_answer)
-            face.set_last_interaction(user_input, final_answer)
-        else:
-            print("--- Nessuna risposta testuale ricevuta dall'LLM. ---")
-            
-        print("Risposta completa: " + final_answer)
-        return final_answer
-        
-    except Exception as e:
-        error_msg = f"Eccezione duranteask_llm: {e}"
-        print(error_msg)
-        return error_msg
-
-
 def bootstrap_model():
     print("--- Avvio bootstrap del modello, solo se locale... ---")
     if config.LLM_PROVIDER == "ollama-local":
@@ -265,10 +124,13 @@ def start_assistant(debug=False, telegram=False):
             if stt_manager.listen_for_wakeword():
                 # Riproduce il suono di conferma
                 last_interaction_time = time.time()
-                play_audio("sounds/bubblepop.mp3")
+                
                 if not is_awake:
                     is_awake = True
                     face.set_mode("awake")
+                face.set_speaking(True)
+                play_audio(TTSManager().recurrent_audio.get("dimmi"))
+                face.set_speaking(False)
 
     except KeyboardInterrupt:
         logging.info("Spegni assistente...")
