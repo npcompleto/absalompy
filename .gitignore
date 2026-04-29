@@ -214,3 +214,4 @@ persona/wiki/entries/*
 persona/wiki/raw/*
 persona/memory/*
 persona/alarms.json
+sounds/*.wav

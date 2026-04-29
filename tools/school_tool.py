@@ -96,7 +96,7 @@ def extract_week_data(page):
                         print("verifica", data_val, materia, verifica)
                         add_school_event("verifica", data_val, materia, verifica)
 
-def axios_login(p):
+def axios_login(p, headless=True):
     """ Effettua il login al registro Axios """
     logging.info("Avvio login Axios...")
     customer_id = os.getenv("AXIOS_CUSTOMER_ID")
@@ -110,7 +110,7 @@ def axios_login(p):
     
     try:
         # Avvio browser - Headless True per l'esecuzione in background
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=headless)
         context = browser.new_context()
         page = context.new_page()
         
@@ -125,7 +125,7 @@ def axios_login(p):
         
         # Click sul pulsante di login
         # L'utente specifica un pulsante di tipo submit con testo "Accedi con Axios "
-        print("Esecuzione login...")
+        logging.info("Esecuzione login...")
         # Usiamo un selettore che cerchi l'attribulo value o il testo
         login_button = page.locator('input[type="submit"], button[type="submit"]').filter(has_text="Accedi con Axios")
         if login_button.count() == 0:
@@ -262,7 +262,7 @@ def list_school_events(start_date: str = None, end_date: str = None):
 def list_school_ranks():
     """Elenca i voti salvati"""
     try:
-        axios_rank_sync()
+        axios_rank_sync(headless=False)
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute('SELECT data, materia, tipo, valutazione, obiettivi, osservazioni, docente FROM school_ranks ORDER BY data DESC')
@@ -278,11 +278,11 @@ def list_school_ranks():
         return f"Errore durante la lettura: {e}"
     
 
-def axios_rank_sync():
+def axios_rank_sync(headless: bool = True):
     """aggiorna i voti dal registro Axios """
     logging.info("Avvio sincronizzazione voti Axios...")
     p = sync_playwright().start()
-    page, browser = axios_login(p)
+    page, browser = axios_login(p, headless=headless)
     registro_di_classe = page.locator('h4').filter(has_text="Voti")
     registro_di_classe.click()
     page.wait_for_selector("#s2id_fiFrazId", timeout=30000)
@@ -291,13 +291,13 @@ def axios_rank_sync():
         tableVotiLengthSelect = page.locator("select[name='table-voti_length']")
         tableVotiLengthSelect.click()
         tableVotiLengthSelect.select_option("Tutti")
-        print(tableVotiLengthSelect.locator("option").count())
+        logging.info(f"Trovate {tableVotiLengthSelect.locator('option').count()} opzioni.")
         tableVotiLengthSelect.dispatch_event("change")
-        print(tableVotiLengthSelect.input_value())
+        logging.info(f"Selezionato: {tableVotiLengthSelect.input_value()}")
         page.wait_for_timeout(2000)
         rows = page.locator("#table-voti tbody tr")
         count = rows.count()
-        print(f"Trovate {count} valutazioni.")
+        logging.info(f"Trovate {count} valutazioni.")
 
         for i in range(count):
             row = rows.nth(i)
