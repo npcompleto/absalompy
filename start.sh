@@ -20,11 +20,19 @@ pip install --quiet -r requirements.txt
 
 # Analisi parametri
 DEBUG_MODE=false
+USE_HAILO=false
 for arg in "$@"; do
     if [ "$arg" == "debug" ]; then
         DEBUG_MODE=true
+    elif [ "$arg" == "hailo" ]; then
+        USE_HAILO=true
     fi
 done
+
+HAILO_FLAG=""
+if [ "$USE_HAILO" = true ]; then
+    HAILO_FLAG="--hailo"
+fi
 
 # Funzione per pulire i processi all'uscita (CTRL+C)
 cleanup() {
@@ -45,7 +53,7 @@ FACE_PID=$!
 export DISPLAY=:0
 
 echo "--- Avvio Absalom Assistant... ---"
-python absalom.py $1 $2 $3 $4
+python absalom.py $HAILO_FLAG "$@"
 ABSALOM_PID=$!
 echo "--- Absalom OS è attivo. Premi CTRL+C per terminare. ---"
 # Attende la fine dei processi

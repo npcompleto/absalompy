@@ -8,6 +8,7 @@ import queue
 import logging
 import numpy as np
 import time
+from hailo_whisper import HailoWhisperModel, HAILO_AVAILABLE
 
 # Inizializza Whisper (usiamo tiny per velocità, soprattutto su Raspberry Pi)
 
@@ -28,8 +29,16 @@ def download_model():
 class STTManager:
     def __init__(self):
         try:
-            logging.info("Caricamento modello Whisper (large-v3)...")
-            self.whisper_model = WhisperModel("large-v3", device="cpu", compute_type="int8")
+            if config.USE_HAILO:
+                if HAILO_AVAILABLE:
+                    logging.info("Caricamento modello Whisper con accelerazione HAILO...")
+                    self.whisper_model = HailoWhisperModel(model_size="base") # Hailo solitamente ottimizzato per base/tiny
+                else:
+                    logging.error("Accelerazione Hailo richiesta ma librerie non trovate! Fallback su CPU...")
+                    self.whisper_model = WhisperModel("large-v3", device="cpu", compute_type="int8")
+            else:
+                logging.info("Caricamento modello Whisper standard (large-v3) su CPU...")
+                self.whisper_model = WhisperModel("large-v3", device="cpu", compute_type="int8")
             if not os.path.exists(config.VOSK_MODEL_PATH):
                 download_model()
             # Initialize model

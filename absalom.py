@@ -168,6 +168,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Absalom OS Assistant")
     parser.add_argument("--debug", action="store_true", help="Avvia in modalità debug (input da tastiera)")
     parser.add_argument("--telegram", action="store_true", help="Avvia in modalità telegram")
+    parser.add_argument("--hailo", action="store_true", help="Usa Hailo per l'accelerazione di Whisper")
     args = parser.parse_args()
+    
+    if args.hailo:
+        config.USE_HAILO = True
+        logging.info("Hailo acceleration enabled via flag.")
     
     start_assistant(debug=args.debug, telegram=args.telegram)

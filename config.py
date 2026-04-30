@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 import os
 import sounddevice as sd
 load_dotenv()
+USE_HAILO = os.getenv("USE_HAILO", "false").lower() == "true"
 
 INACTIVITY_TIMEOUT = 120  # 120 secondi di inattività per lo standby
 
