@@ -1,7 +1,20 @@
+import logging
+import sys
+
+# Configurazione logging immediata (prima degli altri import)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("absalom.log"),
+        logging.StreamHandler(sys.stdout)
+    ],
+    force=True  # Obbliga l'uso di questa configurazione
+)
+
 import time
 import numpy as np
 import os
-import sys
 import argparse
 import re
 import json
@@ -25,22 +38,12 @@ from telegram_manager import TelegramManager
 from face_client import FaceClient
 import constants
 import config
-import logging
 from workers.dreaming_worker import DreamingWorker
 from workers.remote_commands_worker import RemoteCommandsWorker
 from workers.alarm_worker import AlarmWorker
 from workers.ingest_worker import IngestWorker
 from utils import play_audio
 from agent import Agent
-
-logging.basicConfig(
-    level=logging.INFO,  # Mostra tutto (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("absalom.log"),  # Scrive su file
-        logging.StreamHandler(sys.stdout)    # Scrive anche su console
-    ]
-)
 
 
 
