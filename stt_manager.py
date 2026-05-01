@@ -46,10 +46,13 @@ class STTManager:
             grammar = json.dumps(config.WAKE_WORDS + ["ehm", "uhm", "ah", "eh", "si", "no", "che", "ma", "[unk]", "salmo","asilo"])
             # Avviamo con un recognizer LIMITATO alle sole wakewords + [unk] per efficienza
             self.vosk_recognizer = KaldiRecognizer(self.vosk_model, config.VOSK_RATE, grammar)
-            logging.info(f"Avvio stream audio su dispositivo: {config.AUDIO_DEVICE_INDEX} ({config.AUDIO_DEVICE_NAME})")
+            
+            print(f"--- Tentativo apertura stream audio su dispositivo: {config.AUDIO_DEVICE_INDEX} ({config.AUDIO_DEVICE_NAME}) a {config.SAMPLE_RATE}Hz ---")
             self.stream = sounddevice.RawInputStream(samplerate=config.SAMPLE_RATE, blocksize=16000, dtype='int16',
                                 channels=1, callback=self.callback, device=config.AUDIO_DEVICE_INDEX)
             self.stream.start()
+            print("--- Stream audio avviato con successo ---")
+            
             self.q = queue.Queue()
             logging.info(f"Listening for wakeword: {config.WAKE_WORDS}")
         except Exception as e:
