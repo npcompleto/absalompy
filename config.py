@@ -3,8 +3,7 @@ import os
 import sounddevice as sd
 load_dotenv()
 USE_HAILO = os.getenv("USE_HAILO", "false").lower() == "true"
-HAILO_MODEL_PATH = os.getenv("HAILO_MODEL_PATH", "models/whisper_small.hef")
-HAILO_MODEL_URL = os.getenv("HAILO_MODEL_URL", "https://dev-public.hailo.ai/v5.3.0/blob/Whisper-Small.hef")
+HAILO_MODEL_PATH = os.getenv("HAILO_MODEL_PATH", "models/Whisper-Small.hef")
 
 INACTIVITY_TIMEOUT = 120  # 120 secondi di inattività per lo standby
 

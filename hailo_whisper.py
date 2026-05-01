@@ -2,8 +2,6 @@ import os
 import logging
 import numpy as np
 import sys
-import urllib.request
-import config
 
 try:
     import hailo_platform
@@ -29,24 +27,7 @@ class HailoWhisperModel:
         
         self.model_size = model_size
         # Percorso di default per il modello HEF (Hailo Executable Format)
-        self.hef_path = hef_path or config.HAILO_MODEL_PATH
-        
-        if not os.path.exists(self.hef_path):
-            self.download_model()
-        
-        if not os.path.exists(self.hef_path):
-            logging.warning(f"HEF model not found at {self.hef_path}. Looking for fallback in hailo-apps...")
-            # Se non troviamo il modello locale, proviamo a usare il wrapper di hailo-apps se il path è configurato
-            try:
-                sys.path.append('/home/devnull/hailo-apps/hailo-apps')
-                from hailo_apps.python.standalone_apps.speech_recognition.speech_recognition import WhisperHailo
-                self.model = WhisperHailo(model_size=model_size)
-                self.mode = "hailo-apps"
-                logging.info("Using WhisperHailo from hailo-apps.")
-                return
-            except ImportError:
-                logging.error("Fallback hailo-apps not available.")
-                raise FileNotFoundError(f"Model HEF not found at {self.hef_path}")
+        self.hef_path = hef_path or os.path.join("models", f"whisper_{model_size}.hef")
 
         logging.info(f"Initializing Hailo Whisper model using hailo_platform ({self.hef_path})...")
         
@@ -64,17 +45,6 @@ class HailoWhisperModel:
             # ma Whisper richiede una pipeline complessa (Encoder + Decoder).
             # Per ora lanciamo un errore se non abbiamo genai o hailo-apps.
             raise NotImplementedError("Manual Whisper implementation using raw hailo_platform is complex. Please use hailo-apps or upgrade to HailoRT 5.3+")
-
-    def download_model(self):
-        """Scarica il modello HEF se non presente."""
-        os.makedirs(os.path.dirname(self.hef_path), exist_ok=True)
-        url = config.HAILO_MODEL_URL
-        logging.info(f"Modello HEF non trovato. Download in corso da {url}...")
-        try:
-            urllib.request.urlretrieve(url, self.hef_path)
-            logging.info(f"Download completato: {self.hef_path}")
-        except Exception as e:
-            logging.error(f"Errore durante il download del modello: {e}")
 
     def transcribe(self, audio, language="it", beam_size=5):
         """
