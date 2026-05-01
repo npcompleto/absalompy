@@ -50,10 +50,15 @@ if AUDIO_DEVICE_INDEX:
 def find_input_device(requested_index):
     devices = []
     try:
+        host_apis = sd.query_hostapis()
+        print("--- Host APIs Rilevate ---")
+        for i, api in enumerate(host_apis):
+            print(f"[{i}] {api['name']} (Default Input: {api['default_input_device']}, Default Output: {api['default_output_device']})")
+        
         devices = sd.query_devices()
         print("--- Elenco Dispositivi Audio Rilevati ---")
         for i, d in enumerate(devices):
-            print(f"[{i}] {d['name']} - Input: {d['max_input_channels']}, Output: {d['max_output_channels']}")
+            print(f"[{i}] {d['name']} - HostAPI: {d['hostapi']}, Input: {d['max_input_channels']}, Output: {d['max_output_channels']}")
         print("-----------------------------------------")
     except Exception as e:
         print(f"!!! Impossibile elencare i dispositivi audio: {e} !!!")
@@ -66,14 +71,13 @@ def find_input_device(requested_index):
         except Exception as e:
             print(f"!!! Errore query su indice {requested_index}: {e} !!!")
 
-    # 2. Prova a cercare per nome (USB o Microphone)
-    try:
-        for i, d in enumerate(devices):
-            if d['max_input_channels'] > 0 and ("usb" in d['name'].lower() or "micro" in d['name'].lower()):
-                print(f"--- Dispositivo USB/Microphone trovato per nome: {d['name']} all'indice {i} ---")
+    # 2. Prova a cercare per nome in modo più aggressivo
+    for i, d in enumerate(devices):
+        if d['max_input_channels'] > 0:
+            lower_name = d['name'].lower()
+            if any(x in lower_name for x in ["usb", "micro", "hw:", "input"]):
+                print(f"--- Dispositivo compatibile trovato per nome: {d['name']} all'indice {i} ---")
                 return i, int(d['default_samplerate']), d['name']
-    except Exception:
-        pass
 
     # 3. Prova il default di sistema
     try:
