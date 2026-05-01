@@ -44,12 +44,29 @@ if AUDIO_DEVICE_INDEX:
     try:
         AUDIO_DEVICE_INDEX = int(AUDIO_DEVICE_INDEX)
     except ValueError:
-        pass
-# Rilevamento automatico SAMPLE_RATE dal sistema
-try:
-    device_info = sd.query_devices(AUDIO_DEVICE_INDEX, 'input')
-    SAMPLE_RATE = int(device_info['default_samplerate'])
-    print(f"--- Audio device [{AUDIO_DEVICE_INDEX if AUDIO_DEVICE_INDEX is not None else 'default'}] detected: {device_info['name']} at {SAMPLE_RATE} Hz ---")
-except Exception as e:
-    print(f"!!! Error querying audio device: {e}. Falling back to 44100 Hz !!!")
-    SAMPLE_RATE = 44100
+        AUDIO_DEVICE_INDEX = None
+
+# Rilevamento automatico del dispositivo di input e SAMPLE_RATE
+def find_input_device(requested_index):
+    try:
+        # Se richiesto un indice specifico, proviamo quello
+        if requested_index is not None:
+            info = sd.query_devices(requested_index, 'input')
+            return requested_index, int(info['default_samplerate']), info['name']
+        
+        # Altrimenti proviamo il default di sistema
+        info = sd.query_devices(None, 'input')
+        return None, int(info['default_samplerate']), info['name']
+    except Exception:
+        # Se il default fallisce, cerchiamo il primo dispositivo con canali di input > 0
+        try:
+            devices = sd.query_devices()
+            for i, d in enumerate(devices):
+                if d['max_input_channels'] > 0:
+                    return i, int(d['default_samplerate']), d['name']
+        except Exception:
+            pass
+    return None, 16000, "Default/Fallback"
+
+AUDIO_DEVICE_INDEX, SAMPLE_RATE, AUDIO_DEVICE_NAME = find_input_device(AUDIO_DEVICE_INDEX)
+print(f"--- Audio device [{AUDIO_DEVICE_INDEX if AUDIO_DEVICE_INDEX is not None else 'default'}] detected: {AUDIO_DEVICE_NAME} at {SAMPLE_RATE} Hz ---")
