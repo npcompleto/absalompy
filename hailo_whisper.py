@@ -7,12 +7,14 @@ try:
     sys.path.append('/home/devnull/hailo-apps/hailo-apps')
     from hailo_apps.python.standalone_apps.speech_recognition.speech_recognition import WhisperHailo
     HAILO_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    logging.error(e)
     try:
         # Alternative import if they used a different structure
         from whisper_hailo import WhisperHailo
         HAILO_AVAILABLE = True
-    except ImportError:
+    except ImportError as e:
+        logging.error(e)
         HAILO_AVAILABLE = False
 
 class HailoWhisperModel:
