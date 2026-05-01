@@ -1,6 +1,8 @@
 from dotenv import load_dotenv
 import os
 import sounddevice as sd
+import logging
+
 load_dotenv()
 USE_HAILO = os.getenv("USE_HAILO", "false").lower() == "true"
 HAILO_MODEL_PATH = os.getenv("HAILO_MODEL_PATH", "models/Whisper-Small.hef")
@@ -51,45 +53,45 @@ def find_input_device(requested_index):
     devices = []
     try:
         host_apis = sd.query_hostapis()
-        print("--- Host APIs Rilevate ---")
+        logging.info("--- Host APIs Rilevate ---")
         for i, api in enumerate(host_apis):
-            print(f"[{i}] {api['name']} (Default Input: {api['default_input_device']}, Default Output: {api['default_output_device']})")
+            logging.info(f"[{i}] {api['name']} (Default Input: {api['default_input_device']}, Default Output: {api['default_output_device']})")
         
         devices = sd.query_devices()
-        print("--- Elenco Dispositivi Audio Rilevati ---")
+        logging.info("--- Elenco Dispositivi Audio Rilevati ---")
         for i, d in enumerate(devices):
-            print(f"[{i}] {d['name']} - HostAPI: {d['hostapi']}, Input: {d['max_input_channels']}, Output: {d['max_output_channels']}")
-        print("-----------------------------------------")
+            logging.info(f"[{i}] {d['name']} - HostAPI: {d['hostapi']}, Input: {d['max_input_channels']}, Output: {d['max_output_channels']}")
+        logging.info("-----------------------------------------")
     except Exception as e:
-        print(f"!!! Impossibile elencare i dispositivi audio: {e} !!!")
+        logging.error(f"Impossibile elencare i dispositivi audio: {e}")
 
     # 1. Prova l'indice richiesto
     if requested_index is not None:
         try:
             info = sd.query_devices(requested_index, 'input')
-            return requested_index, int(info['default_samplerate']), info['name']
+            return requested_index, 16000, info['name']
         except Exception as e:
-            print(f"!!! Errore query su indice {requested_index}: {e} !!!")
+            logging.error(f"Errore query su indice {requested_index}: {e}")
 
     # 2. Prova a cercare per nome in modo più aggressivo
     for i, d in enumerate(devices):
         if d['max_input_channels'] > 0:
             lower_name = d['name'].lower()
             if any(x in lower_name for x in ["usb", "micro", "hw:", "input"]):
-                print(f"--- Dispositivo compatibile trovato per nome: {d['name']} all'indice {i} ---")
-                return i, int(d['default_samplerate']), d['name']
+                logging.info(f"Dispositivo compatibile trovato per nome: {d['name']} all'indice {i}")
+                return i, 16000, d['name']
 
     # 3. Prova il default di sistema
     try:
         info = sd.query_devices(None, 'input')
-        return None, 16000, info['name']
+        return None, int(info['default_samplerate']), info['name']
     except Exception:
         # 4. Ultimo tentativo: il primo con input > 0
         for i, d in enumerate(devices):
             if d['max_input_channels'] > 0:
-                return i, 16000, d['name']
+                return i, int(d['default_samplerate']), d['name']
 
     return None, 16000, "Default/Fallback"
 
 AUDIO_DEVICE_INDEX, SAMPLE_RATE, AUDIO_DEVICE_NAME = find_input_device(AUDIO_DEVICE_INDEX)
-print(f"--- Audio device FINAL: [{AUDIO_DEVICE_INDEX}] {AUDIO_DEVICE_NAME} at {SAMPLE_RATE} Hz ---")
+logging.info(f"Audio device FINAL: [{AUDIO_DEVICE_INDEX}] {AUDIO_DEVICE_NAME} at {SAMPLE_RATE} Hz")

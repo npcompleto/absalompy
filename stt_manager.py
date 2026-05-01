@@ -43,12 +43,14 @@ class STTManager:
                 download_model()
             # Initialize model
             self.vosk_model = Model(config.VOSK_MODEL_PATH)
-            grammar = json.dumps(config.WAKE_WORDS + ["ehm", "uhm", "ah", "eh", "si", "no", "che", "ma", "[unk]", "salmo","asilo"])
-            # Avviamo con un recognizer LIMITATO alle sole wakewords + [unk] per efficienza
-            self.vosk_recognizer = KaldiRecognizer(self.vosk_model, config.VOSK_RATE, grammar)
+            # Inizializziamo Vosk con la frequenza nativa del dispositivo (es. 44100 o 48000)
+            # Vosk gestirà il ricampionamento internamente in modo efficiente
+            self.vosk_recognizer = KaldiRecognizer(self.vosk_model, config.SAMPLE_RATE)
+            
             self.q = queue.Queue()
             logging.info(f"Apertura stream audio: {config.AUDIO_DEVICE_INDEX} ({config.AUDIO_DEVICE_NAME}) a {config.SAMPLE_RATE}Hz")
-            self.stream = sounddevice.RawInputStream(samplerate=config.SAMPLE_RATE, blocksize=16000, dtype='int16',
+            # Lasciamo che sounddevice scelga il blocksize ottimale
+            self.stream = sounddevice.RawInputStream(samplerate=config.SAMPLE_RATE, dtype='int16',
                                 channels=1, callback=self.callback, device=config.AUDIO_DEVICE_INDEX)
             self.stream.start()
             logging.info(f"Listening for wakeword: {config.WAKE_WORDS}")
