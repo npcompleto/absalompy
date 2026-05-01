@@ -31,8 +31,8 @@ class STTManager:
         try:
             if config.USE_HAILO:
                 if HAILO_AVAILABLE:
-                    logging.info("Caricamento modello Whisper con accelerazione HAILO...")
-                    self.whisper_model = HailoWhisperModel(model_size="base") # Hailo solitamente ottimizzato per base/tiny
+                    logging.info(f"Caricamento modello Whisper con accelerazione HAILO da {config.HAILO_MODEL_PATH}...")
+                    self.whisper_model = HailoWhisperModel(model_size="base", hef_path=config.HAILO_MODEL_PATH)
                 else:
                     logging.error("Accelerazione Hailo richiesta ma librerie non trovate! Fallback su CPU...")
                     self.whisper_model = WhisperModel("large-v3", device="cpu", compute_type="int8")
