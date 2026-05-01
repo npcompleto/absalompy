@@ -69,7 +69,7 @@ def find_input_device(requested_index):
     if requested_index is not None:
         try:
             info = sd.query_devices(requested_index, 'input')
-            return requested_index, 16000, info['name']
+            return requested_index, int(info['default_samplerate']), info['name']
         except Exception as e:
             logging.error(f"Errore query su indice {requested_index}: {e}")
 
@@ -79,7 +79,7 @@ def find_input_device(requested_index):
             lower_name = d['name'].lower()
             if any(x in lower_name for x in ["usb", "micro", "hw:", "input"]):
                 logging.info(f"Dispositivo compatibile trovato per nome: {d['name']} all'indice {i}")
-                return i, 16000, d['name']
+                return i, int(d['default_samplerate']), d['name']
 
     # 3. Prova il default di sistema
     try:
