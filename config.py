@@ -48,25 +48,44 @@ if AUDIO_DEVICE_INDEX:
 
 # Rilevamento automatico del dispositivo di input e SAMPLE_RATE
 def find_input_device(requested_index):
+    devices = []
     try:
-        # Se richiesto un indice specifico, proviamo quello
-        if requested_index is not None:
+        devices = sd.query_devices()
+        print("--- Elenco Dispositivi Audio Rilevati ---")
+        for i, d in enumerate(devices):
+            print(f"[{i}] {d['name']} - Input: {d['max_input_channels']}, Output: {d['max_output_channels']}")
+        print("-----------------------------------------")
+    except Exception as e:
+        print(f"!!! Impossibile elencare i dispositivi audio: {e} !!!")
+
+    # 1. Prova l'indice richiesto
+    if requested_index is not None:
+        try:
             info = sd.query_devices(requested_index, 'input')
             return requested_index, int(info['default_samplerate']), info['name']
-        
-        # Altrimenti proviamo il default di sistema
+        except Exception as e:
+            print(f"!!! Errore query su indice {requested_index}: {e} !!!")
+
+    # 2. Prova a cercare per nome (USB o Microphone)
+    try:
+        for i, d in enumerate(devices):
+            if d['max_input_channels'] > 0 and ("usb" in d['name'].lower() or "micro" in d['name'].lower()):
+                print(f"--- Dispositivo USB/Microphone trovato per nome: {d['name']} all'indice {i} ---")
+                return i, int(d['default_samplerate']), d['name']
+    except Exception:
+        pass
+
+    # 3. Prova il default di sistema
+    try:
         info = sd.query_devices(None, 'input')
         return None, int(info['default_samplerate']), info['name']
     except Exception:
-        # Se il default fallisce, cerchiamo il primo dispositivo con canali di input > 0
-        try:
-            devices = sd.query_devices()
-            for i, d in enumerate(devices):
-                if d['max_input_channels'] > 0:
-                    return i, int(d['default_samplerate']), d['name']
-        except Exception:
-            pass
+        # 4. Ultimo tentativo: il primo con input > 0
+        for i, d in enumerate(devices):
+            if d['max_input_channels'] > 0:
+                return i, int(d['default_samplerate']), d['name']
+
     return None, 16000, "Default/Fallback"
 
 AUDIO_DEVICE_INDEX, SAMPLE_RATE, AUDIO_DEVICE_NAME = find_input_device(AUDIO_DEVICE_INDEX)
-print(f"--- Audio device [{AUDIO_DEVICE_INDEX if AUDIO_DEVICE_INDEX is not None else 'default'}] detected: {AUDIO_DEVICE_NAME} at {SAMPLE_RATE} Hz ---")
+print(f"--- Audio device FINAL: [{AUDIO_DEVICE_INDEX}] {AUDIO_DEVICE_NAME} at {SAMPLE_RATE} Hz ---")
