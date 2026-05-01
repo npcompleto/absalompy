@@ -82,12 +82,12 @@ def find_input_device(requested_index):
     # 3. Prova il default di sistema
     try:
         info = sd.query_devices(None, 'input')
-        return None, int(info['default_samplerate']), info['name']
+        return None, 16000, info['name']
     except Exception:
         # 4. Ultimo tentativo: il primo con input > 0
         for i, d in enumerate(devices):
             if d['max_input_channels'] > 0:
-                return i, int(d['default_samplerate']), d['name']
+                return i, 16000, d['name']
 
     return None, 16000, "Default/Fallback"
 

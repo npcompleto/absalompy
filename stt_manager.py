@@ -46,14 +46,11 @@ class STTManager:
             grammar = json.dumps(config.WAKE_WORDS + ["ehm", "uhm", "ah", "eh", "si", "no", "che", "ma", "[unk]", "salmo","asilo"])
             # Avviamo con un recognizer LIMITATO alle sole wakewords + [unk] per efficienza
             self.vosk_recognizer = KaldiRecognizer(self.vosk_model, config.VOSK_RATE, grammar)
-            
-            print(f"--- Tentativo apertura stream audio su dispositivo: {config.AUDIO_DEVICE_INDEX} ({config.AUDIO_DEVICE_NAME}) a {config.SAMPLE_RATE}Hz ---")
+            self.q = queue.Queue()
+            logging.info(f"Apertura stream audio: {config.AUDIO_DEVICE_INDEX} ({config.AUDIO_DEVICE_NAME}) a {config.SAMPLE_RATE}Hz")
             self.stream = sounddevice.RawInputStream(samplerate=config.SAMPLE_RATE, blocksize=16000, dtype='int16',
                                 channels=1, callback=self.callback, device=config.AUDIO_DEVICE_INDEX)
             self.stream.start()
-            print("--- Stream audio avviato con successo ---")
-            
-            self.q = queue.Queue()
             logging.info(f"Listening for wakeword: {config.WAKE_WORDS}")
         except Exception as e:
             logging.error(f"Errore in STTManager: {e}")
@@ -62,58 +59,56 @@ class STTManager:
     def callback(self, indata, frames, time, status):
         """This is called (from a separate thread) for each audio block."""
         if status:
-            logging.debug(f"DEBUG: Audio status: {status}")
+            logging.warning(f"Status Audio: {status}")
         self.q.put(bytes(indata))
-            
-    def listen_for_wakeword(self):
-        try:
-            logging.debug(f"DEBUG: Listening for wakeword")
-            data = self.q.get(timeout=5) # Timeout per permettere il controllo dell'inattività
-            logging.debug(f"DEBUG: Audio data received: {len(data)} bytes")
-            # Se la frequenza hardware è diversa da quella di Vosk (16000), ricampioniamo nel thread principale
-            if config.SAMPLE_RATE != config.VOSK_RATE:
-                audio_data = np.frombuffer(data, dtype=np.int16)
-                num_samples = len(audio_data)
-                new_num_samples = int(num_samples * config.VOSK_RATE / config.SAMPLE_RATE)
-                resampled_audio = np.interp(
-                    np.linspace(0, num_samples, new_num_samples, endpoint=False),
-                    np.arange(num_samples),
-                    audio_data
-                ).astype(np.int16)
-                data = resampled_audio.tobytes()
-                
-        except queue.Empty:
-            return False
 
-        if self.vosk_recognizer.AcceptWaveform(data):
-            result = json.loads(self.vosk_recognizer.Result())
-            text = result.get("text", "").lower().strip()
-            
-            # Se non abbiamo sentito nulla, ignoriamo
-            if not text:
-                return False
+    def listen_for_wakeword(self):
+        # Elaboriamo TUTTI i blocchi attualmente in coda per evitare l'overflow
+        processed_any = False
+        while not self.q.empty():
+            try:
+                data = self.q.get_nowait()
+                audio_data = np.frombuffer(data, dtype=np.int16)
+                processed_any = True
                 
-            # Cerchiamo se una delle wakeword è stata rilevata da Vosk
-            trigger_word = next((w for w in config.WAKE_WORDS if w in text), None)
+                # Monitoraggio volume
+                amplitude = np.max(np.abs(audio_data))
+                
+                # Invia a Vosk
+                if self.vosk_recognizer.AcceptWaveform(data):
+                    result = json.loads(self.vosk_recognizer.Result())
+                    text = result.get("text", "").lower().strip()
+                    if text:
+                        trigger_word = next((w for w in config.WAKE_WORDS if w in text), None)
+                        if trigger_word:
+                            logging.info(f"Wakeword '{trigger_word}' rilevata!")
+                            self.clear_queue()
+                            return True
+                        else:
+                            logging.debug(f"Vosk ha trascritto: '{text}'")
+                else:
+                    partial = json.loads(self.vosk_recognizer.PartialResult())
+                    if partial.get("partial"):
+                        logging.debug(f"Vosk Parziale: {partial['partial']} (vol: {amplitude})")
             
-            if trigger_word:
-                print(f"\n[!] Wakeword '{trigger_word}' rilevata tramite Vosk!")
-                # Svuotiamo la coda per ignorare l'audio precedente (inclusa la wakeword e il bip)
-                while not self.q.empty():
-                    try:
-                        self.q.get_nowait()
-                    except queue.Empty:
-                        break
-                return True
-            else:
-                print(f"DEBUG: Vosk ha trascritto -> '{text}'")
-                # Svuotiamo la coda per ignorare l'audio precedente (inclusa la wakeword e il bip)
-                while not self.q.empty():
-                    try:
-                        self.q.get_nowait()
-                    except queue.Empty:
-                        break
-                return False
+            except queue.Empty:
+                break
+            except Exception as e:
+                logging.error(f"Errore nel loop audio: {e}")
+                break
+        
+        if not processed_any:
+            time.sleep(0.1)
+            
+        return False
+
+    def clear_queue(self):
+        """Svuota la coda audio."""
+        while not self.q.empty():
+            try:
+                self.q.get_nowait()
+            except queue.Empty:
+                break
             
     def listen_for_question(self, duration: int = 5) -> str:
         print(f">>> In ascolto per {duration} secondi con Whisper...")
