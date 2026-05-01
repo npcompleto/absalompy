@@ -31,12 +31,23 @@ class HailoWhisperModel:
 
         logging.info(f"Initializing Hailo Whisper model using hailo_platform ({self.hef_path})...")
         
-        self.vdevice = VDevice()
-        
+        try:
+            logging.info("Creazione VDevice Hailo...")
+            self.vdevice = VDevice()
+            logging.info("VDevice creato con successo.")
+        except Exception as e:
+            logging.error(f"Errore durante la creazione del VDevice Hailo: {e}")
+            raise
+
         if GENAI_AVAILABLE:
-            self.model = Speech2Text(self.vdevice, self.hef_path)
-            self.mode = "genai"
-            logging.info("Using hailo_platform.genai for transcription.")
+            try:
+                logging.info(f"Caricamento modello HEF ({self.hef_path}) tramite Speech2Text (GenAI)...")
+                self.model = Speech2Text(self.vdevice, self.hef_path)
+                self.mode = "genai"
+                logging.info("Modello Hailo caricato e pronto.")
+            except Exception as e:
+                logging.error(f"Errore durante il caricamento del modello GenAI: {e}")
+                raise
         else:
             # Fallback a implementazione manuale o hailo-apps se possibile
             logging.warning("hailo_platform.genai not available. Please ensure HailoRT 5.3+ is installed for best experience.")
