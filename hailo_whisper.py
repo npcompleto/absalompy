@@ -1,8 +1,10 @@
 import os
 import logging
 import numpy as np
+import sys
 
 try:
+    sys.path.append('/home/devnull/hailo-apps')
     from hailo_apps.python.standalone_apps.speech_recognition.speech_recognition import WhisperHailo
     HAILO_AVAILABLE = True
 except ImportError:
